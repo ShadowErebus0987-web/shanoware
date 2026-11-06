@@ -1,0 +1,13 @@
+[
+  {
+    "id": "last-light",
+    "title": "Last Light",
+    "path": "games/last-light/index.html",
+    "art": "games/last-light/art.svg",
+    "palette": { "background": "#0d0b08", "text": "#f3e6cf", "accent": "#ffb347" },
+    "font": "Silkscreen",
+    "tagline": "Keep the lantern lit. The dark is patient.",
+    "saveKey": "lastlight.v1.slot",
+    "slots": 3
+  }
+]

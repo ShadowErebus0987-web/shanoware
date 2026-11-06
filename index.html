@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Save Point</title>
+  <meta name="description" content="All of my games in one place.">
+  <meta name="theme-color" content="#0e0e10">
+  <meta name="color-scheme" content="dark">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/silkscreen-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/pixelify-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-bar="bottom">
+
+  <!-- Pixel icons. A new tab may add <symbol id="i-TABID">; it is optional. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 8 8"><path d="M1 0h2v8H1zM3 1h2v6H3zM5 2h2v4H5zM7 3h1v2H7z" fill="currentColor"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 8 8"><path d="M1 1h6v1H1zM5 0h1v3H5zM1 4h6v1H1zM2 3h1v3H2zM1 7h6v1H1zM4 6h1v2H4z" fill="currentColor"/></symbol>
+    <symbol id="i-back" viewBox="0 0 8 8"><path d="M1 3h6v2H1zM2 2h1v4H2zM3 1h1v6H3z" fill="currentColor"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 8 8"><path d="M1 1h6v1H1zM3 0h2v1H3zM2 2h4v6H2zM3 3h1v4H3zM4 3h1v4H4z" fill="currentColor" fill-rule="evenodd"/></symbol>
+  </svg>
+
+  <div class="app" id="app">
+    <nav class="tabbar" id="tabbar" role="tablist" aria-label="Sections"></nav>
+
+    <main class="tabs">
+      <!-- To add a tab: add a <section data-tab="id" data-label="Name">. The tab bar builds itself. -->
+      <section class="tab" data-tab="play" data-label="Play">
+        <header class="tab-head">
+          <h1 class="wordmark"><span class="gem" aria-hidden="true"></span>Save Point</h1>
+          <p class="tab-sub" id="game-count"></p>
+        </header>
+        <div id="library" aria-live="polite"></div>
+      </section>
+
+      <section class="tab" data-tab="settings" data-label="Settings">
+        <header class="tab-head"><h1 class="wordmark">Settings</h1></header>
+
+        <fieldset class="group">
+          <legend>Tab bar</legend>
+          <p class="hint">Choose which side of the screen the tab bar sits on.</p>
+          <div class="cross">
+            <label class="pos" style="grid-area:top"><input type="radio" name="bar" value="top"><span>Top</span></label>
+            <label class="pos" style="grid-area:left"><input type="radio" name="bar" value="left"><span>Left</span></label>
+            <div class="phone" aria-hidden="true"><i></i></div>
+            <label class="pos" style="grid-area:right"><input type="radio" name="bar" value="right"><span>Right</span></label>
+            <label class="pos" style="grid-area:bottom"><input type="radio" name="bar" value="bottom"><span>Bottom</span></label>
+          </div>
+        </fieldset>
+
+        <section class="group">
+          <h2 class="legend">About</h2>
+          <p class="hint">Save Point keeps your games and saves on this device. Saves are never sent anywhere.</p>
+          <p class="hint">Fonts: Silkscreen and Pixelify Sans, both under the SIL Open Font License.</p>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <!-- A game's screen. Its palette is set from games.json. -->
+  <section class="screen" id="game" inert aria-labelledby="g-title">
+    <header class="screen-bar">
+      <button class="btn btn-ghost" id="g-back" type="button"><svg class="ico"><use href="#i-back"/></svg>Games</button>
+    </header>
+    <div class="screen-body">
+      <div class="hero">
+        <div class="hero-art"><img id="g-art" alt="" width="64" height="80"></div>
+        <div>
+          <h1 class="g-title" id="g-title"></h1>
+          <p class="g-tag" id="g-tag"></p>
+        </div>
+      </div>
+      <button class="btn btn-accent btn-wide" id="g-new" type="button">New game</button>
+      <h2 class="slots-head">Saves</h2>
+      <ul class="slots" id="g-slots"></ul>
+    </div>
+
+    <dialog class="confirm" id="confirm" aria-labelledby="c-title">
+      <form method="dialog">
+        <h2 id="c-title"></h2>
+        <p id="c-body"></p>
+        <div class="confirm-row">
+          <button class="btn" value="cancel" autofocus>Keep it</button>
+          <button class="btn btn-danger" value="delete">Delete</button>
+        </div>
+      </form>
+    </dialog>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
