@@ -8,6 +8,7 @@
     "font": "Silkscreen",
     "tagline": "Keep the lantern lit. The dark is patient.",
     "saveKey": "lastlight.v1.slot",
+    "legacyKey": "lastlight.v1",
     "slots": 3
   }
 ]

@@ -113,6 +113,11 @@ function paint(node, g) {
 
 // Slot n lives at saveKey+n; the game writes a small summary beside it at saveKey+n+".meta":
 // {"progress": [["Endings", 3, 18], ["Notes", 5, 8]], "updated": <ms timestamp>}
+// A game's old single save (legacyKey) becomes Save 1; removed only once copied.
+function migrateLegacy(g) {
+  const old = g.legacyKey && store.get(g.legacyKey), first = (g.saveKey || g.id + '.slot') + 1;
+  if (old != null && store.get(first) === null) { store.set(first, old); if (store.get(first) === old) store.del(g.legacyKey); }
+}
 function readSlots(g) {
   const count = Math.max(1, Math.min(9, g.slots | 0 || 3));
   return Array.from({ length: count }, (_, i) => {
@@ -188,6 +193,7 @@ async function loadGames() {
     if (!r.ok) throw new Error(r.status);
     const data = await r.json();
     games = (Array.isArray(data) ? data : []).filter(validGame);
+    games.forEach(migrateLegacy);
     renderLibrary();
     const fromHash = games.find(g => '#' + g.id === location.hash);
     if (fromHash) { history.replaceState(null, '', location.pathname); openGame(fromHash); }

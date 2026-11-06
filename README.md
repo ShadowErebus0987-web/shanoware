@@ -28,7 +28,7 @@ A home-screen launcher for my games. Plain HTML/CSS/JS, installable, works offli
 ```
 
 The launcher opens the game as `path?slot=N`. The game saves slot N to `saveKey + N`
-and writes a summary beside it at `saveKey + N + ".meta"`:
+and writes a summary beside it (optional `legacyKey`: an older single save that is moved into Save 1) at `saveKey + N + ".meta"`:
 
 ```json
 { "progress": [["Endings", 3, 18], ["Notes", 5, 8]], "updated": 1730000000000 }
