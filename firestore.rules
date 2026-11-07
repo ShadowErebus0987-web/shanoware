@@ -7,7 +7,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() { return request.auth != null; }
+    // Only accounts with a confirmed email can do anything. Email-link sign-ins are always confirmed;
+    // accounts made straight through the API with a password are not, so they can't write junk data.
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
 
     // Shano's own account, for the admin page: the User UID from Firebase console > Authentication > Users.

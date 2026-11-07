@@ -34,6 +34,13 @@ test('profile must say 13 or older', () => assertFails(setDoc(doc(db('ann'), 'us
 test('a birth date can never be stored', () => assertFails(setDoc(doc(db('ann'), 'users/ann'), { ...profile(), birthDate: '2010-01' })));
 test('name longer than 20 characters is refused', () => assertFails(setDoc(doc(db('ann'), 'users/ann'), profile({ name: 'x'.repeat(21) }))));
 test('email updates must be a yes/no', () => assertFails(setDoc(doc(db('ann'), 'users/ann'), profile({ emailUpdates: 'yes' }))));
+test('accounts without a confirmed email can do nothing', async () => {
+  const unverified = env.authenticatedContext('bot', { email: 'bot@example.com', email_verified: false }).firestore();
+  await assertFails(setDoc(doc(unverified, 'users/bot'), profile()));
+  await withProfile('bot');
+  await assertFails(setDoc(doc(unverified, 'users/bot/saves/last-light-1'), save()));
+  await assertFails(getDoc(doc(unverified, 'users/bot')));
+});
 test("cannot create someone else's profile", () => assertFails(setDoc(doc(db('ann'), 'users/bob'), profile())));
 test('signed-out visitors can do nothing', async () => {
   const anon = env.unauthenticatedContext().firestore();
