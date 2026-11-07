@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /admin.html
+Disallow: /tests/
+Sitemap: https://shanoware.com/sitemap.xml
