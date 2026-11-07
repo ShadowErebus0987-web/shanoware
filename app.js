@@ -10,7 +10,7 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch {} },
   json(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
 };
-const KEY = { bar: 'shanoware.bar', player: 'shanoware.player', welcomed: 'shanoware.welcomed', last: 'shanoware.last', newsRead: 'shanoware.newsRead' };
+const KEY = { bar: 'shanoware.bar', player: 'shanoware.player', welcomed: 'shanoware.welcomed', last: 'shanoware.last', newsRead: 'shanoware.newsRead', settings: 'shanoware.settings', errors: 'shanoware.errors' };
 
 // The app used to be called Save Point. Copy its keys across once, then remove the old ones.
 for (const [from, to] of [['savepoint.bar', KEY.bar]]) {
@@ -115,7 +115,7 @@ function setBar(side, animate) {
   if (!SIDES.includes(side)) side = 'left';
   const apply = () => { document.body.dataset.bar = side; };
   animate ? withTransition(apply) : apply();
-  store.set(KEY.bar, side);
+  if (animate) store.set(KEY.bar, side); // only a player's choice is stored
   document.querySelectorAll(`.cross input[value="${side}"]`).forEach(r => { r.checked = true; });
 }
 setBar(store.get(KEY.bar), false);
@@ -131,7 +131,7 @@ function saveName(input, errEl) {
   input.setAttribute('aria-invalid', !name);
   errEl.textContent = name ? '' : 'Enter a name. A short nickname is fine.';
   if (!name) { input.focus(); return false; }
-  store.set(KEY.player, JSON.stringify({ name }));
+  store.set(KEY.player, JSON.stringify({ ...(store.json(KEY.player) || {}), name }));
   input.value = name;
   renderGreeting();
   return true;
@@ -172,7 +172,10 @@ function readSlots(g) {
 function progressParts(meta) {
   return (Array.isArray(meta?.progress) ? meta.progress : [])
     .filter(p => Array.isArray(p) && typeof p[0] === 'string' && Number.isFinite(p[1]))
-    .map(([label, have, total]) => ({ label: label.slice(0, 16), have: Math.max(0, have), total: Number.isFinite(total) && total > 0 ? total : null }));
+    .map(([label, have, total]) => {
+      const t = Number.isFinite(total) && total > 0 ? Math.floor(total) : null;
+      return { label: label.slice(0, 16), have: Math.max(0, Math.min(Math.floor(have), t ?? Infinity)), total: t };
+    });
 }
 function progressText(meta) {
   return progressParts(meta).map(p => p.total ? `${p.label} ${p.have}/${p.total}` : `${p.label} ${p.have}`).join(' · ');
@@ -219,6 +222,9 @@ function renderGreeting() {
   const h = new Date().getHours();
   const hello = h < 5 ? 'Still up' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   const name = playerName(), g = $('greet');
+  const av = allAvatars().find(a => a.key === store.json(KEY.player)?.avatar), img = $('home-avatar');
+  img.hidden = !av;
+  if (av) { img.src = av.src; img.alt = av.name; }
   g.replaceChildren(hello);
   if (name) g.append(', ', el('b', null, name));
 }
@@ -388,6 +394,10 @@ function renderProgress() {
 }
 
 /* ---------- Profile totals ---------- */
+function playtime(sec) {
+  const m = Math.floor(sec / 60), h = Math.floor(m / 60);
+  return h ? `${h}h ${m % 60}m` : m ? `${m}m` : sec > 0 ? '<1m' : '0m';
+}
 function renderTotals() {
   const sum = new Map();
   for (const g of games) for (const s of readSlots(g)) {
@@ -396,11 +406,39 @@ function renderTotals() {
   }
   const dl = $('totals');
   dl.replaceChildren();
-  if (!sum.size) { dl.append(el('p', 'hint', gamesState === 'loading' ? 'Loading…' : 'Your runs and escapes add up here once you play.')); return; }
-  for (const [k, v] of sum) { const d = el('div'); d.append(el('dt', null, k), el('dd', null, String(v))); dl.append(d); }
+  if (!sum.size) { dl.append(el('p', 'hint', gamesState === 'loading' ? 'Loading…' : 'Your playtime, runs and escapes add up here once you play.')); return; }
+  for (const [k, v] of [...sum].sort(([a], [b]) => (b === 'Playtime') - (a === 'Playtime'))) {
+    const d = el('div');
+    d.append(el('dt', null, k), el('dd', null, k === 'Playtime' ? playtime(v) : String(v)));
+    dl.append(d);
+  }
 }
 
-function renderAll() { renderContinue(); renderLibrary(); renderProgress(); renderTotals(); if (current) renderSlots(); }
+function allAvatars() {
+  return games.flatMap(g => (Array.isArray(g.avatars) ? g.avatars : [])
+    .filter(a => a && typeof a.id === 'string' && typeof a.src === 'string' && typeof a.name === 'string')
+    .map(a => ({ key: g.id + '/' + a.id, name: a.name.slice(0, 40), src: a.src })));
+}
+function renderAvatars() {
+  const box = $('avatars'), chosen = store.json(KEY.player)?.avatar, list = allAvatars();
+  box.replaceChildren();
+  if (!list.length) { box.append(el('p', 'hint', gamesState === 'loading' ? 'Loading…' : 'No characters to pick from yet.')); }
+  for (const a of list) {
+    const label = el('label', 'avatar');
+    const r = el('input'); r.type = 'radio'; r.name = 'avatar'; r.value = a.key; r.checked = a.key === chosen;
+    r.addEventListener('change', () => {
+      store.set(KEY.player, JSON.stringify({ ...(store.json(KEY.player) || {}), avatar: a.key }));
+      renderGreeting();
+      toast(`Avatar: ${a.name}`);
+    });
+    const img = el('img'); img.src = a.src; img.alt = ''; img.width = 64; img.height = 64;
+    label.append(r, img, el('span', null, a.name));
+    box.append(label);
+  }
+  renderGreeting();
+}
+
+function renderAll() { renderContinue(); renderLibrary(); renderProgress(); renderTotals(); renderAvatars(); if (current) renderSlots(); }
 
 async function loadGames() {
   gamesState = 'loading'; renderAll();
@@ -489,26 +527,174 @@ $('g-new').addEventListener('click', () => {
   else toast('Every save slot is in use. Delete a save to start a new game.');
 });
 
-/* ---------- Delete with confirmation ---------- */
+/* ---------- Confirmation dialog ---------- */
 const dlg = $('confirm');
-let pending = null;
-function confirmDelete(slot) {
-  pending = slot;
-  $('c-title').textContent = `Delete Save ${slot.n}?`;
-  const p = progressText(slot.meta);
-  $('c-body').textContent = (p ? p + '. ' : '') + 'This cannot be undone.';
-  dlg.showModal();
-}
-dlg.addEventListener('close', () => {
-  if (dlg.returnValue === 'delete' && pending && current) {
-    store.del(pending.key);
-    store.del(pending.key + '.meta');
-    renderSlots();
-    toast(`Save ${pending.n} deleted`);
-  }
+let answer = null;
+function ask(title, body, yes, no = 'Cancel') {
+  dlg.removeAttribute('style');
+  if (current) paint(dlg, current);
+  $('c-title').textContent = title;
+  $('c-body').textContent = body;
+  $('c-yes').textContent = yes;
+  $('c-no').textContent = no;
   dlg.returnValue = '';
-  pending = null;
+  dlg.showModal();
+  return new Promise(res => { answer = res; });
+}
+dlg.addEventListener('close', () => { answer?.(dlg.returnValue === 'yes'); answer = null; });
+
+async function confirmDelete(slot) {
+  const p = progressText(slot.meta);
+  if (!await ask(`Delete Save ${slot.n}?`, (p ? p + '. ' : '') + 'This cannot be undone.', 'Delete', 'Keep it')) return;
+  store.del(slot.key);
+  store.del(slot.key + '.meta');
+  renderSlots();
+  toast(`Save ${slot.n} deleted`);
+}
+
+/* ---------- Settings: sound, vibration, touch controls (read by the games) ---------- */
+const DEFAULTS = { sound: true, music: true, vibration: true, touchSize: 'm', touchAlpha: 0.75, leftHanded: false };
+function settings() { return { ...DEFAULTS, ...(store.json(KEY.settings) || {}) }; }
+function renderSettings() {
+  const s = settings();
+  document.querySelectorAll('[data-setting]').forEach(i => {
+    const k = i.dataset.setting;
+    if (i.type === 'checkbox') i.checked = !!s[k];
+    else if (i.type === 'radio') i.checked = i.value === s[k];
+    else if (i.type === 'range') i.value = Math.round(s[k] * 100);
+  });
+  $('tc-alpha-out').textContent = Math.round(s.touchAlpha * 100) + '%';
+  const pv = $('tc-preview');
+  pv.style.setProperty('--tc-alpha', s.touchAlpha);
+  pv.style.setProperty('--tc-scale', { s: 0.85, m: 1, l: 1.2 }[s.touchSize] || 1);
+  pv.classList.toggle('lefty', s.leftHanded);
+}
+document.querySelectorAll('[data-setting]').forEach(i => i.addEventListener(i.type === 'range' ? 'input' : 'change', () => {
+  const k = i.dataset.setting, s = settings();
+  s[k] = i.type === 'checkbox' ? i.checked : i.type === 'range' ? Math.min(0.95, Math.max(0.2, i.value / 100)) : i.value;
+  store.set(KEY.settings, JSON.stringify(s));
+  if (k === 'vibration' && s.vibration && navigator.vibrate) navigator.vibrate(20);
+  renderSettings();
+}));
+
+/* ---------- Export, import, download, delete ---------- */
+const MAX_IMPORT = 512 * 1024;
+function saveKeys() {
+  return games.flatMap(g => readSlots(g).flatMap(s => [s.key, s.key + '.meta']));
+}
+function download(name, obj) {
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' }));
+  a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+}
+const today = () => new Date().toISOString().slice(0, 10);
+function pack(keys) {
+  const data = {};
+  for (const k of keys) { const v = store.get(k); if (v !== null) data[k] = v; }
+  return { app: 'shanoware', v: 1, exported: new Date().toISOString(), data };
+}
+function savesMsg(text, bad) { const m = $('saves-msg'); m.textContent = text; m.classList.toggle('bad', !!bad); }
+
+$('export').addEventListener('click', () => {
+  if (gamesState !== 'ok') { savesMsg('Your games are still loading. Try again in a moment.', true); return; }
+  const out = pack([...saveKeys(), KEY.player]);
+  const n = saveKeys().filter(k => !k.endsWith('.meta') && out.data[k] !== undefined).length;
+  if (!n) { savesMsg('There are no saves to export yet.', true); return; }
+  download(`shanoware-saves-${today()}.json`, out);
+  savesMsg(`Exported ${n} save${n > 1 ? 's' : ''}.`);
 });
+
+// Everything from a file is checked before any of it is stored. Returns entries to write, or an error message.
+function checkImport(obj) {
+  if (!obj || typeof obj !== 'object' || obj.app !== 'shanoware' || obj.v !== 1 || !obj.data || typeof obj.data !== 'object' || Array.isArray(obj.data))
+    return { error: "That isn't a Shanoware save file." };
+  const allowed = new Set(saveKeys()), entries = [];
+  for (const [k, v] of Object.entries(obj.data)) {
+    if (typeof v !== 'string' || v.length > 200000) continue;
+    let parsed; try { parsed = JSON.parse(v); } catch { continue; }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+    if (allowed.has(k)) entries.push([k, v]);
+    else if (k === KEY.player) {
+      const avatar = allAvatars().some(a => a.key === parsed.avatar) ? parsed.avatar : undefined;
+      entries.push([k, JSON.stringify({ name: cleanName(parsed.name), avatar })]);
+    }
+  }
+  const saves = entries.filter(([k]) => allowed.has(k) && !k.endsWith('.meta')).length;
+  if (!saves) return { error: 'That file has no saves for the games here.' };
+  return { entries, saves };
+}
+let importing = false;
+$('import').addEventListener('click', () => { if (!importing) $('import-file').click(); });
+$('import-file').addEventListener('change', async () => {
+  const f = $('import-file').files[0];
+  $('import-file').value = '';
+  if (!f || importing) return;
+  if (f.size > MAX_IMPORT) { savesMsg('That file is too big to be a save file. Nothing was changed.', true); return; }
+  importing = true; $('import').disabled = true; savesMsg('Checking the file…');
+  try {
+    let obj; try { obj = JSON.parse(await f.text()); } catch { obj = null; }
+    const res = checkImport(obj);
+    if (res.error) { savesMsg(res.error + ' Nothing was changed.', true); return; }
+    const when = typeof obj.exported === 'string' ? obj.exported.slice(0, 10) : 'an earlier date';
+    if (!await ask('Import saves?', `This file has ${res.saves} save${res.saves > 1 ? 's' : ''} from ${when}. Saves in the same slots on this device will be replaced.`, 'Import')) { savesMsg('Import cancelled. Nothing was changed.'); return; }
+    // A save's summary must match the save; drop old summaries for replaced slots, then write.
+    for (const [k] of res.entries) if (!k.endsWith('.meta') && k !== KEY.player) store.del(k + '.meta');
+    for (const [k, v] of res.entries) store.set(k, v);
+    renderAll(); $('name-input').value = playerName();
+    savesMsg(`Imported ${res.saves} save${res.saves > 1 ? 's' : ''}.`);
+  } finally { importing = false; $('import').disabled = false; }
+});
+
+$('download-data').addEventListener('click', () => {
+  const keys = new Set(saveKeys());
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.')) keys.add(k); } } catch {}
+  download(`shanoware-my-data-${today()}.json`, pack([...keys]));
+});
+
+$('wipe').addEventListener('click', async () => {
+  if (!await ask('Delete everything?', 'This removes every save, your name, avatar and settings from this device. Export your saves first if you want to keep them. This cannot be undone.', 'Delete everything')) return;
+  const keys = new Set(saveKeys());
+  games.forEach(g => g.legacyKey && keys.add(g.legacyKey));
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.')) keys.add(k); } } catch {}
+  keys.forEach(k => store.del(k));
+  location.reload();
+});
+
+/* ---------- Error log (local only) ---------- */
+const timeFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+function errorLog() { const l = store.json(KEY.errors); return Array.isArray(l) ? l.filter(e => e && typeof e.msg === 'string') : []; }
+function renderErrors() {
+  const list = $('errors'), log = errorLog().slice().reverse();
+  list.replaceChildren();
+  $('errors-actions').hidden = !log.length;
+  if (!log.length) { list.append(el('li', 'hint', 'No errors recorded on this device.')); return; }
+  for (const e of log) {
+    const li = el('li');
+    li.append(el('span', 'err-when', `${timeFmt.format(new Date(e.t))} · ${String(e.page || '').slice(0, 60)}`), el('span', 'err-msg', e.msg), el('span', 'err-src', String(e.src || '')));
+    list.append(li);
+  }
+}
+$('errors-copy').addEventListener('click', async () => {
+  const text = errorLog().map(e => `${new Date(e.t).toISOString()} ${e.page} ${e.msg} ${e.src || ''}`).join('\n');
+  try { await navigator.clipboard.writeText(text); toast('Error log copied'); }
+  catch { toast("Couldn't copy. Use Download my data instead."); }
+});
+$('errors-clear').addEventListener('click', () => { store.del(KEY.errors); renderErrors(); toast('Error log cleared'); });
+
+/* ---------- Offline, and protecting saves from automatic clean-up ---------- */
+function renderOnline() { $('offline').hidden = navigator.onLine; }
+addEventListener('online', renderOnline);
+addEventListener('offline', renderOnline);
+async function protectStorage() {
+  const out = $('storage-status');
+  if (!navigator.storage?.persist) { out.textContent = ''; return; }
+  let ok = await navigator.storage.persisted().catch(() => false);
+  if (!ok) ok = await navigator.storage.persist().catch(() => false);
+  out.textContent = ok ? 'Protected: your phone will not clear these saves to free up space.'
+    : 'Not protected yet: if your phone runs very low on space it may clear saved data. Adding Shanoware to your home screen usually protects it.';
+}
 
 /* ---------- Welcome (first launch only) ---------- */
 const welcome = $('welcome'), steps = [...welcome.querySelectorAll('.w-step')], dots = [...welcome.querySelectorAll('.steps li')];
@@ -533,13 +719,17 @@ function maybeWelcome() {
 }
 
 /* ---------- Keep things fresh when coming back from a game ---------- */
-addEventListener('pageshow', e => { if (e.persisted) { leaving = false; renderAll(); } });
-addEventListener('storage', () => { renderAll(); renderGreeting(); });
+addEventListener('pageshow', e => { if (e.persisted) { leaving = false; renderAll(); renderErrors(); } });
+addEventListener('storage', () => { renderAll(); renderSettings(); renderErrors(); });
 
 /* ---------- Start ---------- */
 $('name-input').value = playerName();
 renderGreeting();
 renderAll();
+renderSettings();
+renderErrors();
+renderOnline();
+protectStorage();
 const shown = Date.now();
 Promise.all([loadGames(), loadNews()]).finally(() => {
   // Keep the splash up long enough to read, never longer than loading takes past that.

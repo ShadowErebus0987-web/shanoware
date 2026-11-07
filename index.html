@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Shanoware</title>
   <meta name="description" content="All of Shano's games in one place.">
@@ -15,6 +16,7 @@
   <link rel="preload" href="fonts/silkscreen-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/pixelify-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
+  <script src="errlog.js"></script>
 </head>
 <body data-bar="left">
 
@@ -49,7 +51,8 @@
       <section class="tab" data-tab="home" data-label="Home">
         <header class="tab-head">
           <p class="wordmark wordmark-sm">Shanoware</p>
-          <h1 class="greet" id="greet"></h1>
+          <div class="greet-row"><img class="avatar-sm" id="home-avatar" alt="" width="48" height="48" hidden><h1 class="greet" id="greet"></h1></div>
+          <p class="offline" id="offline" role="status" hidden>You're offline. Games you've opened before still work.</p>
         </header>
         <div id="continue"></div>
         <section class="block" aria-labelledby="news-h">
@@ -81,6 +84,11 @@
           </div>
           <p class="field-err" id="name-err" role="alert"></p>
         </form>
+        <fieldset class="group">
+          <legend>Avatar</legend>
+          <p class="hint">Characters from Shano's games.</p>
+          <div class="avatars" id="avatars"></div>
+        </fieldset>
         <section class="group" aria-labelledby="totals-h">
           <h2 class="legend" id="totals-h">Totals</h2>
           <dl class="totals" id="totals"></dl>
@@ -93,10 +101,63 @@
           <legend>Tab bar</legend>
           <p class="hint">Choose which side of the screen the tab bar sits on.</p>
         </fieldset>
+        <fieldset class="group">
+          <legend>Sound</legend>
+          <label class="switch"><input type="checkbox" data-setting="sound"><span>Sound effects</span></label>
+          <label class="switch"><input type="checkbox" data-setting="music"><span>Music and ambience</span></label>
+          <label class="switch"><input type="checkbox" data-setting="vibration"><span>Vibration</span></label>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Touch controls</legend>
+          <div class="tc-preview" id="tc-preview" aria-hidden="true"><i class="tc-stick"></i><i class="tc-b1"></i><i class="tc-b2"></i><i class="tc-b3"></i></div>
+          <p class="sub-legend" id="size-l">Size</p>
+          <div class="seg" role="radiogroup" aria-labelledby="size-l">
+            <label><input type="radio" name="touchSize" value="s" data-setting="touchSize"><span>Small</span></label>
+            <label><input type="radio" name="touchSize" value="m" data-setting="touchSize"><span>Medium</span></label>
+            <label><input type="radio" name="touchSize" value="l" data-setting="touchSize"><span>Large</span></label>
+          </div>
+          <label class="sub-legend" for="tc-alpha">See-through <output id="tc-alpha-out" class="num"></output></label>
+          <input class="range" id="tc-alpha" type="range" min="20" max="95" step="5" data-setting="touchAlpha">
+          <label class="switch"><input type="checkbox" data-setting="leftHanded"><span>Left-handed (joystick on the right)</span></label>
+        </fieldset>
+
+        <section class="group" aria-labelledby="saves-h">
+          <h2 class="legend" id="saves-h">Saves</h2>
+          <p class="hint">Saves live on this device. Export a copy to keep it safe or to move it to another phone.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" id="export">Export saves</button>
+            <button class="btn" type="button" id="import">Import saves</button>
+          </div>
+          <input type="file" id="import-file" accept=".json,application/json" hidden>
+          <p class="hint msg" id="saves-msg" role="status"></p>
+          <p class="hint" id="storage-status"></p>
+        </section>
+
+        <section class="group" aria-labelledby="account-h">
+          <h2 class="legend" id="account-h">Your data</h2>
+          <p class="hint">Download everything Shanoware keeps about you, or remove it all from this device.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" id="download-data">Download my data</button>
+            <button class="btn btn-danger-outline" type="button" id="wipe">Delete everything</button>
+          </div>
+        </section>
+
+        <section class="group" aria-labelledby="errors-h">
+          <h2 class="legend" id="errors-h">Error log</h2>
+          <p class="hint">If something breaks, it's noted here. The log stays on this device and is never sent anywhere.</p>
+          <ol class="errors" id="errors"></ol>
+          <div class="btn-row" id="errors-actions">
+            <button class="btn" type="button" id="errors-copy">Copy log</button>
+            <button class="btn" type="button" id="errors-clear">Clear log</button>
+          </div>
+        </section>
+
         <section class="group" aria-labelledby="about-h">
           <h2 class="legend" id="about-h">About</h2>
-          <p class="hint">Shanoware is the home for every game made by Shano. Starting with Last Light, a pixel-art horror game where your lantern is the only thing keeping the dark away.</p>
-          <p class="hint">Fonts: Silkscreen and Pixelify Sans, both under the SIL Open Font License.</p>
+          <p class="hint">Shanoware is the home for every game made by Shano. Pick up where you left off, track your endings and unlocks, and get new games as soon as they drop. Starting with Last Light, a pixel-art horror game where your lantern is the only thing keeping the dark away.</p>
+          <p class="hint">Games, art, characters and code by Shano. Fonts: Silkscreen (copyright 2001 The Silkscreen Project Authors) and Pixelify Sans (copyright 2021 The Pixelify Sans Project Authors), both under the SIL Open Font License 1.1.</p>
+          <p class="links"><a href="terms.html">Terms of Service</a><a href="privacy.html">Privacy Policy</a></p>
         </section>
       </section>
     </main>
@@ -120,16 +181,6 @@
       <ul class="slots" id="g-slots"></ul>
     </div>
 
-    <dialog class="confirm" id="confirm" aria-labelledby="c-title">
-      <form method="dialog">
-        <h2 id="c-title"></h2>
-        <p id="c-body"></p>
-        <div class="confirm-row">
-          <button class="btn" value="cancel" autofocus>Keep it</button>
-          <button class="btn btn-danger" value="delete">Delete</button>
-        </div>
-      </form>
-    </dialog>
   </section>
 
   <!-- First launch only. -->
@@ -179,6 +230,17 @@
     <p class="wordmark">Shanoware</p>
     <i class="splash-bar"></i>
   </div>
+
+  <dialog class="confirm" id="confirm" aria-labelledby="c-title">
+    <form method="dialog">
+      <h2 id="c-title"></h2>
+      <p id="c-body"></p>
+      <div class="confirm-row">
+        <button class="btn" value="cancel" id="c-no" autofocus>Cancel</button>
+        <button class="btn btn-danger" value="yes" id="c-yes">OK</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
