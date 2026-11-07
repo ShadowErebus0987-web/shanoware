@@ -8,9 +8,35 @@ Plain HTML/CSS/JS, installable, works offline after the first visit.
 
 ## Going live (GitHub Pages)
 
-1. Push this folder to a GitHub repository.
+1. Create an empty **public** repository on GitHub (for example `shanoware`) and push this folder to it.
 2. In the repository: **Settings → Pages → Build and deployment → Source: Deploy from a branch**, branch `main`, folder `/ (root)`.
 3. Every push to `main` is now live at `https://<username>.github.io/<repo>/`.
+
+Until step 4 below is done, Shanoware runs on each device only, with no sign-in.
+
+## Switching on accounts and cloud saves (Firebase, free Spark plan)
+
+1. Go to <https://console.firebase.google.com>, **Add project**, and stay on the free **Spark** plan (no card needed).
+2. **Build → Authentication → Get started → Sign-in method → Email/Password**: turn on **Email link (passwordless sign-in)**.
+3. **Authentication → Settings → Authorized domains**: add `<username>.github.io`.
+4. **Build → Firestore Database → Create database** (production mode, any nearby location).
+5. Open `firestore.rules` in this folder, replace `[ADMIN EMAIL]` with the email you'll sign in with, then paste the whole file into **Firestore → Rules** and **Publish**.
+6. **Firestore → Indexes → Single field → Add exemption**: collection `saves`, field `game`, tick **Collection group** ascending. (The admin page uses it to count saves per game.)
+7. **Project settings → General → Your apps → Web (`</>`)**, register an app, and copy the `firebaseConfig` object into `firebase-config.js` in place of `null`. This config is public by design; the rules keep data safe.
+8. Push. Players now sign in by email link, pass the 13+ check, and their saves sync.
+
+The admin page is at `/admin.html`. Only the email in the rules can see the numbers.
+
+## Email updates (Buttondown)
+
+1. Make a Buttondown account and add your mailing address in its settings (it's printed in every email, with an unsubscribe link).
+2. Put your Buttondown username in `buttondownUser` in `firebase-config.js`.
+
+Players who tick "Email me when new games come out" are added through Buttondown's public sign-up form (tagged `shanoware`); Buttondown sends them a confirmation email first.
+
+## Tests
+
+The database rules have their own tests: see `tests/README.md`.
 
 ## Adding a game
 
