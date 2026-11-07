@@ -12,7 +12,7 @@ before(async () => {
     projectId: 'demo-shanoware',
     firestore: {
       host: '127.0.0.1', port: 8085,
-      rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8').replace('[ADMIN EMAIL]', ADMIN),
+      rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8').replace('[ADMIN UID]', 'shano'),
     },
   });
 });
@@ -109,7 +109,7 @@ test('only the admin can count players and saves', async () => {
   await assertFails(getCountFromServer(collection(db('ann'), 'users')));
   await assertFails(getCountFromServer(query(collectionGroup(db('ann'), 'saves'), where('game', '==', 'last-light'))));
 });
-test('admin needs a verified email', async () => {
-  const fake = env.authenticatedContext('eve', { email: ADMIN, email_verified: false }).firestore();
+test('admin is matched by account, not by email', async () => {
+  const fake = env.authenticatedContext('eve', { email: ADMIN, email_verified: true }).firestore();
   await assertFails(getCountFromServer(collection(fake, 'users')));
 });

@@ -10,11 +10,10 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
 
-    // Shano's own account, for the admin page. Replace with the email you sign in with.
+    // Shano's own account, for the admin page: the User UID from Firebase console > Authentication > Users.
+    // A UID reveals nothing about the person, so it is safe in this public file.
     function isAdmin() {
-      return signedIn()
-        && request.auth.token.email == '[ADMIN EMAIL]'
-        && request.auth.token.email_verified == true;
+      return signedIn() && request.auth.uid == '[ADMIN UID]';
     }
 
     function hasExactly(d, keys) { return d.keys().hasOnly(keys) && d.keys().hasAll(keys); }

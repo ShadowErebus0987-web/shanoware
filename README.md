@@ -20,12 +20,12 @@ Until step 4 below is done, Shanoware runs on each device only, with no sign-in.
 2. **Build → Authentication → Get started → Sign-in method → Email/Password**: turn on **Email link (passwordless sign-in)**.
 3. **Authentication → Settings → Authorized domains**: add `shanoware.com`.
 4. **Build → Firestore Database → Create database** (production mode, any nearby location).
-5. Open `firestore.rules` in this folder, replace `[ADMIN EMAIL]` with the email you'll sign in with, then paste the whole file into **Firestore → Rules** and **Publish**.
+5. Paste the whole of `firestore.rules` into **Firestore → Rules** and **Publish**. After your first sign-in, copy your **User UID** from **Authentication → Users** into the rules in place of `[ADMIN UID]` and publish again (this makes you the admin).
 6. **Firestore → Indexes → Single field → Add exemption**: collection `saves`, field `game`, tick **Collection group** ascending. (The admin page uses it to count saves per game.)
 7. **Project settings → General → Your apps → Web (`</>`)**, register an app, and copy the `firebaseConfig` object into `firebase-config.js` in place of `null`. This config is public by design; the rules keep data safe.
 8. Push. Players now sign in by email link, pass the 13+ check, and their saves sync.
 
-The admin page is at `/admin.html`. Only the email in the rules can see the numbers.
+The admin page is at `/admin.html`. Only the account whose UID is in the rules can see the numbers.
 
 ## Email updates (Buttondown)
 
