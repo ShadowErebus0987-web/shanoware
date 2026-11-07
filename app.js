@@ -10,7 +10,8 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch {} },
   json(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
 };
-const KEY = { bar: 'shanoware.bar', player: 'shanoware.player', welcomed: 'shanoware.welcomed', last: 'shanoware.last', newsRead: 'shanoware.newsRead', settings: 'shanoware.settings', errors: 'shanoware.errors' };
+const KEY = { bar: 'shanoware.bar', player: 'shanoware.player', welcomed: 'shanoware.welcomed', last: 'shanoware.last', newsRead: 'shanoware.newsRead', settings: 'shanoware.settings', errors: 'shanoware.errors',
+  sync: 'shanoware.sync', acct: 'shanoware.acct', ageBlocked: 'shanoware.ageBlocked', pendingDelete: 'shanoware.pendingDelete', linkSends: 'shanoware.linkSends' };
 
 // The app used to be called Save Point. Copy its keys across once, then remove the old ones.
 for (const [from, to] of [['savepoint.bar', KEY.bar]]) {
@@ -134,6 +135,7 @@ function saveName(input, errEl) {
   store.set(KEY.player, JSON.stringify({ ...(store.json(KEY.player) || {}), name }));
   input.value = name;
   renderGreeting();
+  pushProfile({ name });
   return true;
 }
 $('name-form').addEventListener('submit', e => {
@@ -429,6 +431,7 @@ function renderAvatars() {
     r.addEventListener('change', () => {
       store.set(KEY.player, JSON.stringify({ ...(store.json(KEY.player) || {}), avatar: a.key }));
       renderGreeting();
+      pushProfile({ avatar: a.key });
       toast(`Avatar: ${a.name}`);
     });
     const img = el('img'); img.src = a.src; img.alt = ''; img.width = 64; img.height = 64;
@@ -530,26 +533,28 @@ $('g-new').addEventListener('click', () => {
 /* ---------- Confirmation dialog ---------- */
 const dlg = $('confirm');
 let answer = null;
-function ask(title, body, yes, no = 'Cancel') {
+function ask(title, body, yes, no = 'Cancel', danger = false) {
   dlg.removeAttribute('style');
   if (current) paint(dlg, current);
   $('c-title').textContent = title;
   $('c-body').textContent = body;
   $('c-yes').textContent = yes;
+  $('c-yes').className = 'btn ' + (danger ? 'btn-danger' : 'btn-brand');
   $('c-no').textContent = no;
   dlg.returnValue = '';
   dlg.showModal();
   return new Promise(res => { answer = res; });
 }
-dlg.addEventListener('close', () => { answer?.(dlg.returnValue === 'yes'); answer = null; });
+dlg.addEventListener('close', () => { const v = dlg.returnValue; answer?.(v === 'yes' ? true : v === 'no' ? false : null); answer = null; });
 
 async function confirmDelete(slot) {
   const p = progressText(slot.meta);
-  if (!await ask(`Delete Save ${slot.n}?`, (p ? p + '. ' : '') + 'This cannot be undone.', 'Delete', 'Keep it')) return;
+  if (!await ask(`Delete Save ${slot.n}?`, (p ? p + '. ' : '') + 'This cannot be undone.', 'Delete', 'Keep it', true)) return;
   store.del(slot.key);
   store.del(slot.key + '.meta');
   renderSlots();
   toast(`Save ${slot.n} deleted`);
+  syncAll();
 }
 
 /* ---------- Settings: sound, vibration, touch controls (read by the games) ---------- */
@@ -642,23 +647,35 @@ $('import-file').addEventListener('change', async () => {
     // A save's summary must match the save; drop old summaries for replaced slots, then write.
     for (const [k] of res.entries) if (!k.endsWith('.meta') && k !== KEY.player) store.del(k + '.meta');
     for (const [k, v] of res.entries) store.set(k, v);
+    const base = syncBase(); for (const [k] of res.entries) delete base[k]; store.set(KEY.sync, JSON.stringify(base));
+    syncAll();
     renderAll(); $('name-input').value = playerName();
     savesMsg(`Imported ${res.saves} save${res.saves > 1 ? 's' : ''}.`);
   } finally { importing = false; $('import').disabled = false; }
 });
 
-$('download-data').addEventListener('click', () => {
+$('download-data').addEventListener('click', async () => {
   const keys = new Set(saveKeys());
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.')) keys.add(k); } } catch {}
-  download(`shanoware-my-data-${today()}.json`, pack([...keys]));
+  const out = pack([...keys]);
+  if (cloud && user) {
+    try { out.account = await cloud.exportAll(); }
+    catch (e) { toast(cloud.explain(e) + ' Downloading what is on this device.'); }
+  }
+  download(`shanoware-my-data-${today()}.json`, out);
 });
 
-$('wipe').addEventListener('click', async () => {
-  if (!await ask('Delete everything?', 'This removes every save, your name, avatar and settings from this device. Export your saves first if you want to keep them. This cannot be undone.', 'Delete everything')) return;
+function wipeLocal(keepSettings) {
   const keys = new Set(saveKeys());
   games.forEach(g => g.legacyKey && keys.add(g.legacyKey));
-  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.')) keys.add(k); } } catch {}
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.') && !k.startsWith('shanoware.dev.')) keys.add(k); } } catch {}
+  if (keepSettings) [KEY.settings, KEY.bar, KEY.welcomed, KEY.ageBlocked, KEY.pendingDelete].forEach(k => keys.delete(k));
   keys.forEach(k => store.del(k));
+}
+$('wipe').addEventListener('click', async () => {
+  if (cloud && user) { deleteAccount(); return; }
+  if (!await ask('Delete everything?', 'This removes every save, your name, avatar and settings from this device. Export your saves first if you want to keep them. This cannot be undone.', 'Delete everything', 'Cancel', true)) return;
+  wipeLocal(false);
   location.reload();
 });
 
@@ -696,6 +713,299 @@ async function protectStorage() {
     : 'Not protected yet: if your phone runs very low on space it may clear saved data. Adding Shanoware to your home screen usually protects it.';
 }
 
+/* ---------- Accounts and cloud saves (only when firebase-config.js is filled in) ---------- */
+let cloud = null, user = null, buttondown = null, configured = false;
+const isLocalhost = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+function logError(msg) {
+  const l = errorLog(); l.push({ t: Date.now(), page: 'app', msg: String(msg).slice(0, 300), src: '' });
+  store.set(KEY.errors, JSON.stringify(l.slice(-50)));
+}
+async function startCloud() {
+  let cfg = null;
+  // Test settings are honoured on this computer only, never in the released app.
+  if (isLocalhost) { try { cfg = JSON.parse(store.get('shanoware.dev.config')); } catch {} }
+  try { const m = await import('./firebase-config.js'); cfg = cfg || m.firebaseConfig; buttondown = m.buttondownUser || null; } catch {}
+  configured = !!cfg;
+  if (!cfg) return false;
+  try { cloud = await import('./cloud.js'); cloud.start(cfg); return true; }
+  catch (e) { logError('Accounts could not start: ' + e.message); cloud = null; return false; }
+}
+
+const gateSteps = [...document.querySelectorAll('.g-step')];
+function gate(step, text) {
+  $('gate').hidden = false;
+  gateSteps.forEach(g => { g.hidden = g.dataset.g !== step; });
+  if (text) $('g-working').textContent = text;
+  const shown = gateSteps.find(g => g.dataset.g === step);
+  shown.querySelector('input:not([type=checkbox]), select, button')?.focus({ preventScroll: true });
+}
+let gateDone;
+const gatePassed = new Promise(res => { gateDone = res; });
+function openApp() { $('gate').hidden = true; gateDone(); renderAccount(); syncAll(); }
+
+async function accountGate() {
+  if (store.get(KEY.ageBlocked)) { configured = true; gate('blocked'); return gatePassed; }
+  if (!await startCloud()) {
+    if (configured) { gate('offline'); return gatePassed; } // accounts are on but the code couldn't load (offline)
+    return; // accounts not set up yet: the app runs on this device only
+  }
+  user = await new Promise(res => { const off = cloud.onUser(u => { off(); res(u); }); });
+  cloud.onUser(u => { user = u; renderAccount(); });
+  if (cloud.isLink()) {
+    const email = cloud.rememberedEmail();
+    if (email) finishLink(email); else gate('confirm');
+  } else if (user) afterSignIn();
+  else gate(navigator.onLine ? 'signin' : 'offline');
+  return gatePassed;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+function checkEmail(input, err) {
+  const v = input.value.trim();
+  const ok = EMAIL_RE.test(v) && input.checkValidity();
+  input.setAttribute('aria-invalid', !ok);
+  err.textContent = ok ? '' : "That email address doesn't look right.";
+  if (!ok) input.focus();
+  return ok ? v : null;
+}
+// Rate limit on this device: one email a minute, five an hour. Firebase limits on its side too.
+function canSend() {
+  const now = Date.now(), sends = (store.json(KEY.linkSends) || []).filter(t => now - t < 3600e3);
+  if (sends.length && now - sends[sends.length - 1] < 60e3) return Math.ceil((60e3 - (now - sends[sends.length - 1])) / 1000);
+  if (sends.length >= 5) return Math.ceil((3600e3 - (now - sends[0])) / 1000);
+  return 0;
+}
+function noteSend() { const now = Date.now(); store.set(KEY.linkSends, JSON.stringify([...(store.json(KEY.linkSends) || []).filter(t => now - t < 3600e3), now])); }
+let resendTimer;
+function resendCountdown() {
+  clearInterval(resendTimer);
+  const b = $('g-resend');
+  const tick = () => { const w = canSend(); b.disabled = w > 0; b.textContent = w > 0 ? `Send again in ${w > 90 ? Math.ceil(w / 60) + ' min' : w + 's'}` : 'Send again'; if (!w) clearInterval(resendTimer); };
+  tick(); resendTimer = setInterval(tick, 1000);
+}
+let sending = false;
+async function sendLink(email, errEl) {
+  const wait = canSend();
+  if (wait) { errEl.textContent = `Please wait ${wait > 90 ? Math.ceil(wait / 60) + ' minutes' : wait + ' seconds'} before asking for another email.`; return false; }
+  if (sending) return false;
+  sending = true; $('g-send').disabled = true; $('g-send').textContent = 'Sending…';
+  try {
+    await cloud.sendLink(email);
+    noteSend();
+    $('g-sent-to').textContent = email;
+    gate('sent'); resendCountdown();
+    return true;
+  } catch (e) { errEl.textContent = cloud.explain(e); return false; }
+  finally { sending = false; $('g-send').disabled = false; $('g-send').textContent = 'Email me a sign-in link'; }
+}
+$('g-email').closest('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const email = checkEmail($('g-email'), $('g-email-err'));
+  if (email) sendLink(email, $('g-email-err'));
+});
+$('g-resend').addEventListener('click', () => { $('g-sent-err').textContent = ''; sendLink($('g-sent-to').textContent, $('g-sent-err')); });
+$('g-other').addEventListener('click', () => gate('signin'));
+$('g-retry').addEventListener('click', () => location.reload());
+$('g-confirm-email').closest('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const email = checkEmail($('g-confirm-email'), $('g-confirm-err'));
+  if (email) finishLink(email);
+});
+
+async function finishLink(email) {
+  gate('working', 'Signing you in…');
+  try { user = await cloud.finishLink(email); afterSignIn(); }
+  catch (e) { gate('signin'); $('g-email').value = email; $('g-email-err').textContent = cloud.explain(e); }
+}
+
+async function afterSignIn() {
+  const acct = store.json(KEY.acct);
+  // Signed in before on this device: play straight away, even offline. The profile refreshes when online.
+  if (acct?.uid === user.uid) { openApp(); refreshProfile(); return; }
+  gate('working', 'Loading your account…');
+  try {
+    const profile = await cloud.getProfile();
+    if (!profile) { gate('signup'); return; }
+    // A different account than this device's saves belong to: start clean so saves never mix.
+    if (acct && acct.uid !== user.uid) wipeLocal(true);
+    adoptProfile(profile);
+    store.set(KEY.acct, JSON.stringify({ uid: user.uid }));
+    openApp();
+  } catch (e) { gate(navigator.onLine ? 'signin' : 'offline'); $('g-email-err').textContent = cloud.explain(e); }
+}
+function adoptProfile(p) {
+  const local = store.json(KEY.player) || {};
+  store.set(KEY.player, JSON.stringify({ name: cleanName(local.name || p.name), avatar: local.avatar || p.avatar || undefined, emailUpdates: !!p.emailUpdates }));
+  if (p.name && !store.get(KEY.welcomed)) $('w-name').value = cleanName(p.name);
+  $('name-input').value = playerName();
+  renderGreeting(); renderAvatars();
+}
+async function refreshProfile() {
+  try { const p = await cloud.getProfile(); if (p) { adoptProfile(p); renderAccount(); } } catch {}
+}
+let profileTimer, profilePending = {};
+function pushProfile(fields) {
+  if (!cloud || !user || !store.json(KEY.acct)) return;
+  Object.assign(profilePending, fields);
+  clearTimeout(profileTimer);
+  profileTimer = setTimeout(async () => {
+    const f = profilePending; profilePending = {};
+    try { await cloud.updateProfile(f); } catch (e) { logError('Profile not saved to account: ' + cloud.explain(e)); }
+  }, 2500); // the server accepts at most one profile change every 2 seconds
+}
+
+// Age check: only "13 or older" is ever stored, never the birth date.
+(function fillAgeSelects() {
+  const months = new Intl.DateTimeFormat(undefined, { month: 'long' });
+  for (let m = 1; m <= 12; m++) { const o = el('option', null, months.format(new Date(2000, m - 1, 1))); o.value = m; $('g-month').append(o); }
+  const y = new Date().getFullYear();
+  for (let i = y; i >= y - 100; i--) { const o = el('option', null, String(i)); o.value = i; $('g-year').append(o); }
+})();
+function is13(year, month) {
+  // Counted from the last day of the birth month, so nobody is let in early.
+  const birth = new Date(year, month, 0), turns13 = new Date(birth.getFullYear() + 13, birth.getMonth(), birth.getDate());
+  return turns13 <= new Date();
+}
+let creating = false;
+$('g-month').closest('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (creating) return;
+  const m = +$('g-month').value, y = +$('g-year').value;
+  if (!m || !y) { $('g-age-err').textContent = 'Choose the month and year you were born.'; (m ? $('g-year') : $('g-month')).focus(); return; }
+  $('g-age-err').textContent = '';
+  if (!is13(y, m)) {
+    store.set(KEY.ageBlocked, '1');
+    try { await cloud.removeSignInAccount(); } catch { try { await cloud.signOut(); } catch {} }
+    gate('blocked');
+    return;
+  }
+  creating = true; $('g-create').disabled = true; $('g-create').textContent = 'Creating…';
+  const emailUpdates = $('g-updates').checked;
+  try {
+    const local = store.json(KEY.player) || {};
+    await cloud.createProfile({ name: cleanName(local.name), avatar: local.avatar, emailUpdates });
+    if (emailUpdates) subscribe(user.email);
+    store.set(KEY.player, JSON.stringify({ ...local, emailUpdates }));
+    store.set(KEY.acct, JSON.stringify({ uid: user.uid }));
+    openApp();
+  } catch (err) { $('g-age-err').textContent = cloud.explain(err); }
+  finally { creating = false; $('g-create').disabled = false; $('g-create').textContent = 'Create my account'; }
+});
+
+// Email updates go through Buttondown's public sign-up form; Buttondown sends its own confirmation email.
+function subscribe(email) {
+  if (!buttondown || !email) return;
+  fetch(`https://buttondown.com/api/emails/embed-subscribe/${encodeURIComponent(buttondown)}`, {
+    method: 'POST', mode: 'no-cors', body: new URLSearchParams({ email, tag: 'shanoware' }),
+  }).catch(e => logError('Email sign-up failed: ' + e.message));
+}
+
+/* ---------- Sync: this device <-> account ---------- */
+// For each slot we remember the cloud version we last agreed on ("base").
+const syncBase = () => store.json(KEY.sync) || {};
+const toCloudMeta = m => ({ progress: (m.progress || []).map(([l, h, t]) => ({ l, h, t })), totals: m.totals || {} });
+const fromCloudMeta = (m, updated) => ({ progress: (m?.progress || []).map(p => [p.l, p.h, p.t]), totals: m?.totals || {}, updated });
+let syncing = null, lastSync = null, syncProblem = '';
+function syncAll() {
+  if (!cloud || !user || !store.json(KEY.acct) || gamesState !== 'ok') return Promise.resolve(false);
+  if (syncing) return syncing;
+  syncing = doSync().finally(() => { syncing = null; renderSync(); });
+  return syncing;
+}
+async function doSync() {
+  if (!navigator.onLine) { syncProblem = "You're offline. Saves will sync when you're back online."; return false; }
+  let remote;
+  try { remote = await cloud.listSaves(); }
+  catch (e) { syncProblem = cloud.explain(e); return false; }
+  const base = syncBase(); let changed = false, ok = true;
+  for (const g of games) for (const s of readSlots(g)) {
+    const r = remote.get(`${g.id}-${s.n}`), b = base[s.key];
+    const localData = store.get(s.key), localMeta = s.meta, localUpdated = typeof localMeta?.updated === 'number' ? localMeta.updated : 0;
+    const pull = () => { store.set(s.key, JSON.stringify(r.data)); store.set(s.key + '.meta', JSON.stringify(fromCloudMeta(r.meta, r.updated))); base[s.key] = r.updated; changed = true; };
+    // Each upload gets a new version time, so other devices always notice the change.
+    const push = async (updated = Math.max(Date.now(), (b || 0) + 1)) => {
+      if (!localMeta?.totals) return; // the game writes the summary the first time it opens this save
+      try { await cloud.putSave(g.id, s.n, JSON.parse(localData), toCloudMeta(localMeta), updated); base[s.key] = updated;
+        if (!localMeta.updated) { store.set(s.key + '.meta', JSON.stringify({ ...localMeta, updated })); } }
+      catch (e) { ok = false; logError(`Save ${s.n} of ${g.title} did not sync: ${cloud.explain(e)}`); }
+    };
+    try {
+      if (localData === null && !r) delete base[s.key];
+      else if (localData === null) {
+        if (b !== undefined && r.updated === b) { await cloud.removeSave(g.id, s.n); delete base[s.key]; }  // deleted here
+        else pull();                                                                                   // new from another device
+      } else if (!r) {
+        if (b !== undefined && localUpdated <= b) { store.del(s.key); store.del(s.key + '.meta'); delete base[s.key]; changed = true; } // deleted on another device
+        else await push();
+      } else if (JSON.stringify(JSON.parse(localData)) === JSON.stringify(r.data)) base[s.key] = r.updated;
+      else if (b === r.updated) await push();                          // only this device changed
+      else if (b !== undefined && localUpdated <= b) pull();           // only the account changed
+      else {                                                           // both changed: the player decides
+        const choice = await ask(`Which ${g.title} Save ${s.n} should be kept?`,
+          `This device: ${progressText(localMeta) || 'saved game'}${localUpdated ? ', ' + ago(localUpdated).toLowerCase() : ''}.\n` +
+          `Your account: ${progressText(fromCloudMeta(r.meta)) || 'saved game'}, ${ago(r.updated).toLowerCase()}.\nThe other one will be replaced.`,
+          'Keep account save', 'Keep this device');
+        if (choice === true) pull();
+        else if (choice === false) await push(Date.now());
+        else ok = false; // dismissed: ask again next time
+      }
+    } catch (e) { ok = false; logError(`Save ${s.n} of ${g.title} did not sync: ${cloud.explain(e)}`); }
+  }
+  store.set(KEY.sync, JSON.stringify(base));
+  if (changed) renderAll();
+  lastSync = Date.now(); syncProblem = ok ? '' : 'Some saves did not sync. Details are in the error log.';
+  return ok;
+}
+function renderSync() {
+  const out = $('sync-status');
+  out.hidden = !(cloud && user);
+  out.textContent = syncProblem || (lastSync ? `Synced with your account ${ago(lastSync).replace('Played ', '')}.` : 'Not synced yet.');
+  out.classList.toggle('bad', !!syncProblem);
+}
+addEventListener('online', () => syncAll());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncAll(); });
+
+/* ---------- Account settings ---------- */
+function renderAccount() {
+  const signedIn = !!(cloud && user && store.json(KEY.acct));
+  $('acct-line').textContent = signedIn ? `Signed in as ${user.email}.` : 'Download everything Shanoware keeps about you, or remove it all from this device.';
+  $('acct-updates-row').hidden = !signedIn;
+  $('acct-updates').checked = !!store.json(KEY.player)?.emailUpdates;
+  $('sign-out').hidden = !signedIn;
+  $('wipe').textContent = signedIn ? 'Delete my account' : 'Delete everything';
+  renderSync();
+}
+$('acct-updates').addEventListener('change', () => {
+  const on = $('acct-updates').checked;
+  store.set(KEY.player, JSON.stringify({ ...(store.json(KEY.player) || {}), emailUpdates: on }));
+  pushProfile({ emailUpdates: on });
+  if (on) { subscribe(user.email); $('acct-msg').textContent = 'You may get an email asking you to confirm.'; }
+  else $('acct-msg').textContent = 'Turned off. To stop emails already on their way, use the unsubscribe link at the bottom of any email.';
+});
+$('sign-out').addEventListener('click', async () => {
+  if (!await ask('Sign out?', 'Your saves stay in your account and come back when you sign in again. They will be removed from this device.', 'Sign out')) return;
+  const synced = await syncAll();
+  if (!synced && !await ask("Some saves haven't synced", 'Signing out now would lose the changes that only exist on this device. Sign out anyway?', 'Sign out anyway', 'Stay signed in')) return;
+  wipeLocal(true);
+  await cloud.signOut();
+  location.reload();
+});
+async function deleteAccount() {
+  if (!await ask('Delete your account?', 'This deletes your account, every save, your stats and your profile, from your account and this device. This cannot be undone. Export your saves first if you want to keep a copy.', 'Delete my account', 'Cancel', true)) return;
+  if (!cloud.recentlySignedIn()) {
+    if (!await ask('Sign in again first', "For safety, you need to sign in again before deleting your account. You'll be signed out now; after you sign back in, you'll be asked to confirm.", 'Sign out and continue')) return;
+    store.set(KEY.pendingDelete, '1');
+    wipeLocal(true); await cloud.signOut(); location.reload();
+    return;
+  }
+  $('wipe').disabled = true; $('acct-msg').textContent = 'Deleting…';
+  try {
+    await cloud.deleteAccount();
+    wipeLocal(false);
+    location.reload();
+  } catch (e) { $('acct-msg').textContent = cloud.explain(e); $('wipe').disabled = false; }
+}
+
 /* ---------- Welcome (first launch only) ---------- */
 const welcome = $('welcome'), steps = [...welcome.querySelectorAll('.w-step')], dots = [...welcome.querySelectorAll('.steps li')];
 function goStep(i) {
@@ -719,7 +1029,7 @@ function maybeWelcome() {
 }
 
 /* ---------- Keep things fresh when coming back from a game ---------- */
-addEventListener('pageshow', e => { if (e.persisted) { leaving = false; renderAll(); renderErrors(); } });
+addEventListener('pageshow', e => { if (e.persisted) { leaving = false; renderAll(); renderErrors(); syncAll(); } });
 addEventListener('storage', () => { renderAll(); renderSettings(); renderErrors(); });
 
 /* ---------- Start ---------- */
@@ -733,7 +1043,12 @@ protectStorage();
 const shown = Date.now();
 Promise.all([loadGames(), loadNews()]).finally(() => {
   // Keep the splash up long enough to read, never longer than loading takes past that.
-  setTimeout(() => { $('splash').classList.add('done'); maybeWelcome(); }, Math.max(0, 500 - (Date.now() - shown)));
+  setTimeout(async () => {
+    $('splash').classList.add('done');
+    await accountGate();
+    maybeWelcome();
+    if (store.get(KEY.pendingDelete) && cloud && user) { store.del(KEY.pendingDelete); showTab('settings'); deleteAccount(); }
+  }, Math.max(0, 500 - (Date.now() - shown)));
 });
 
 if ('serviceWorker' in navigator) {

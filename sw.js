@@ -1,8 +1,9 @@
 // Bump when the SHELL list changes. File contents update on their own (stale-while-revalidate).
-const CACHE = 'shanoware-v2';
+const CACHE = 'shanoware-v3';
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js', 'errlog.js', 'games.json', 'news.json', 'manifest.webmanifest',
-  'terms.html', 'privacy.html', 'offline.html',
+  'terms.html', 'privacy.html', 'offline.html', 'cloud.js', 'firebase-config.js',
+  'vendor/firebase-13.1.0/firebase-app.js', 'vendor/firebase-13.1.0/firebase-auth.js', 'vendor/firebase-13.1.0/firebase-firestore-lite.js',
   'fonts/silkscreen-400.woff2', 'fonts/silkscreen-700.woff2',
   'fonts/pixelify-400.woff2', 'fonts/pixelify-700.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon-32.png'

@@ -1,0 +1,110 @@
+rules_version = '2';
+
+// Shanoware database rules.
+// Players can only read and change their own data, and every save is checked for impossible values.
+// Paste this whole file into Firebase console > Firestore Database > Rules, then Publish.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Shano's own account, for the admin page. Replace with the email you sign in with.
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email == '[ADMIN EMAIL]'
+        && request.auth.token.email_verified == true;
+    }
+
+    function hasExactly(d, keys) { return d.keys().hasOnly(keys) && d.keys().hasAll(keys); }
+
+    // ---------- Profile: users/{uid} ----------
+    function validProfile(d) {
+      return hasExactly(d, ['name', 'avatar', 'over13', 'emailUpdates', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() <= 20
+        && d.avatar is string && d.avatar.size() <= 80
+        && d.over13 == true                      // only "13 or older: yes" is ever stored
+        && d.emailUpdates is bool
+        && d.updatedAt == request.time;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && validProfile(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner(uid) && validProfile(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.time > resource.data.updatedAt + duration.value(2, 's');   // rate limit
+      allow delete: if isOwner(uid);
+
+      // ---------- Saves: users/{uid}/saves/{game}-{slot} ----------
+      match /saves/{saveId} {
+        allow read: if isOwner(uid) || isAdmin();
+        // A profile (which proves the age check passed) must exist before any save.
+        allow create: if isOwner(uid)
+          && exists(/databases/$(database)/documents/users/$(uid))
+          && validSave(saveId, request.resource.data);
+        allow update: if isOwner(uid) && validSave(saveId, request.resource.data)
+          && request.time > resource.data.writtenAt + duration.value(5, 's');  // rate limit
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    // Admin page: count saves per game across all players.
+    match /{path=**}/saves/{saveId} {
+      allow read: if isAdmin();
+    }
+
+    // ---------- Save checks ----------
+    function validSave(saveId, d) {
+      return hasExactly(d, ['game', 'slot', 'data', 'meta', 'updated', 'writtenAt'])
+        && d.slot is int && d.slot >= 1 && d.slot <= 9
+        && saveId == d.game + '-' + string(d.slot)
+        && d.updated is int && d.updated > 0
+        && d.updated <= request.time.toMillis() + 600000      // no saves from the future
+        && d.writtenAt == request.time
+        && d.game == 'last-light' && validLastLight(d.data, d.meta);
+        // A new game needs its own check added here before its saves can sync.
+    }
+
+    function validLastLight(d, m) {
+      return d is map
+        && d.keys().hasOnly(['runs', 'deaths', 'escapes', 'playtime', 'mostRooms', 'wickLore', 'best', 'met',
+                             'endings', 'notes', 'lastDeath', 'lastEnding', 'lastHelped', 'lantern', 'smudgeSaved', 'settings'])
+        && d.keys().hasAll(['runs', 'deaths', 'escapes', 'playtime', 'mostRooms', 'wickLore', 'met', 'endings', 'notes'])
+        && d.runs is int && d.runs >= 0 && d.runs <= 100000
+        && d.deaths is int && d.deaths >= 0 && d.deaths <= d.runs
+        && d.escapes is int && d.escapes >= 0 && d.escapes <= d.runs
+        && d.playtime is int && d.playtime >= 0
+        && d.mostRooms is int && d.mostRooms >= 0 && d.mostRooms <= 70
+        && d.wickLore is int && d.wickLore >= 0 && d.wickLore <= 5
+        && (!('best' in d) || (d.best is number && d.best > 0 && d.best <= 1200))
+        && d.met is map && d.met.keys().hasOnly(['wick', 'gauge', 'smudge', 'moth', 'lis'])
+        // 18 endings exist, and each one needs an escape
+        && d.endings is map
+        && d.endings.keys().hasOnly(['hatch_alone', 'hatch_lamp', 'hatch_quiet', 'hatch_sun',
+                                     'lift_alone', 'lift_lamp', 'lift_quiet', 'lift_sun',
+                                     'chimney_alone', 'chimney_lamp', 'chimney_quiet', 'chimney_sun',
+                                     'drain_alone', 'drain_lamp', 'drain_quiet', 'drain_sun',
+                                     'foreman', 'secret'])
+        && d.endings.size() <= d.escapes
+        // 8 notes exist
+        && d.notes is list && d.notes.size() <= 8 && d.notes.hasOnly([0, 1, 2, 3, 4, 5, 6, 7])
+        && (!('lastDeath' in d) || (d.lastDeath is string && d.lastDeath.size() < 24))
+        && (!('lastEnding' in d) || (d.lastEnding is string && d.lastEnding.size() < 24))
+        && (!('lastHelped' in d) || (d.lastHelped is string && d.lastHelped.size() < 24))
+        && (!('lantern' in d) || d.lantern in ['brass', 'miner', 'foreman', 'whistle', 'candle', 'first'])
+        && (!('smudgeSaved' in d) || d.smudgeSaved == true)
+        && (!('settings' in d) || (d.settings is map && d.settings.keys().hasOnly(['hints']) && d.settings.hints is bool))
+        // The progress shown in the launcher must match the save itself.
+        && m is map && hasExactly(m, ['progress', 'totals'])
+        && m.progress is list && m.progress.size() == 3
+        && m.progress[0] == {'l': 'Endings', 'h': d.endings.size(), 't': 18}
+        && m.progress[1] == {'l': 'Notes', 'h': d.notes.size(), 't': 8}
+        && hasExactly(m.progress[2], ['l', 'h', 't']) && m.progress[2].l == 'Lanterns' && m.progress[2].t == 6
+        && m.progress[2].h is int && m.progress[2].h >= 1 && m.progress[2].h <= 6
+        && m.totals == {'Runs': d.runs, 'Escapes': d.escapes, 'Playtime': d.playtime};
+    }
+  }
+}

@@ -1,0 +1,5 @@
+Firebase JavaScript SDK 13.1.0 (browser builds from the "firebase" npm package).
+Copyright Google LLC. Licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+Only change: imports of firebase-app.js point to this folder instead of www.gstatic.com,
+and source-map comments are removed.

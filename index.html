@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://buttondown.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Shanoware</title>
   <meta name="description" content="All of Shano's games in one place.">
@@ -131,14 +131,18 @@
           </div>
           <input type="file" id="import-file" accept=".json,application/json" hidden>
           <p class="hint msg" id="saves-msg" role="status"></p>
+          <p class="hint" id="sync-status" hidden></p>
           <p class="hint" id="storage-status"></p>
         </section>
 
         <section class="group" aria-labelledby="account-h">
           <h2 class="legend" id="account-h">Your data</h2>
-          <p class="hint">Download everything Shanoware keeps about you, or remove it all from this device.</p>
+          <p class="hint" id="acct-line">Download everything Shanoware keeps about you, or remove it all from this device.</p>
+          <label class="switch" id="acct-updates-row" hidden><input type="checkbox" id="acct-updates"><span>Email me when new games come out</span></label>
+          <p class="hint msg" id="acct-msg" role="status"></p>
           <div class="btn-row">
             <button class="btn" type="button" id="download-data">Download my data</button>
+            <button class="btn" type="button" id="sign-out" hidden>Sign out</button>
             <button class="btn btn-danger-outline" type="button" id="wipe">Delete everything</button>
           </div>
         </section>
@@ -181,6 +185,71 @@
       <ul class="slots" id="g-slots"></ul>
     </div>
 
+  </section>
+
+  <!-- Accounts: shown only when Firebase is set up in firebase-config.js. -->
+  <section class="gate" id="gate" hidden aria-labelledby="gate-h">
+    <div class="welcome-body">
+      <div class="gate-brand"><img src="icons/icon-192.png" alt="" width="64" height="64"><p class="wordmark">Shanoware</p></div>
+
+      <form class="g-step" data-g="signin" novalidate>
+        <h1 class="w-title" id="gate-h">Sign in</h1>
+        <p class="w-lede">Shanoware uses your email address so your saves can follow you to any device. There's no password: we email you a sign-in link.</p>
+        <label class="legend" for="g-email">Email address</label>
+        <input class="field" id="g-email" type="email" name="email" autocomplete="email" inputmode="email" spellcheck="false" maxlength="254" required>
+        <p class="field-err" id="g-email-err" role="alert"></p>
+        <button class="btn btn-brand btn-wide" type="submit" id="g-send">Email me a sign-in link</button>
+        <p class="hint">By continuing you agree to the <a href="terms.html">Terms of Service</a> and <a href="privacy.html">Privacy Policy</a>.</p>
+      </form>
+
+      <div class="g-step" data-g="sent" hidden>
+        <h1 class="w-title">Check your email</h1>
+        <p class="w-lede">We sent a sign-in link to <b id="g-sent-to"></b>. Open it on this device to finish. It can take a minute, and sometimes lands in spam.</p>
+        <button class="btn btn-wide" type="button" id="g-resend" disabled>Send again</button>
+        <button class="btn btn-ghost btn-wide" type="button" id="g-other">Use a different email</button>
+        <p class="field-err" id="g-sent-err" role="alert"></p>
+      </div>
+
+      <form class="g-step" data-g="confirm" novalidate hidden>
+        <h1 class="w-title">Confirm your email</h1>
+        <p class="w-lede">This link was opened in a different browser or device from the one that asked for it. Type the same email address to finish signing in.</p>
+        <label class="legend" for="g-confirm-email">Email address</label>
+        <input class="field" id="g-confirm-email" type="email" name="email" autocomplete="email" inputmode="email" spellcheck="false" maxlength="254" required>
+        <p class="field-err" id="g-confirm-err" role="alert"></p>
+        <button class="btn btn-brand btn-wide" type="submit">Sign in</button>
+      </form>
+
+      <div class="g-step" data-g="working" hidden>
+        <p class="w-lede" id="g-working">Signing you in…</p>
+        <i class="splash-bar"></i>
+      </div>
+
+      <form class="g-step" data-g="signup" novalidate hidden>
+        <h1 class="w-title">One more step</h1>
+        <fieldset class="age">
+          <legend class="legend">When were you born?</legend>
+          <div class="field-row">
+            <select class="field" id="g-month" aria-label="Month" required><option value="">Month</option></select>
+            <select class="field" id="g-year" aria-label="Year" required><option value="">Year</option></select>
+          </div>
+          <p class="hint">Shanoware is for ages 13 and up. Only "13 or older: yes" is saved. Your birth date is never stored.</p>
+        </fieldset>
+        <p class="field-err" id="g-age-err" role="alert"></p>
+        <label class="check"><input type="checkbox" id="g-updates"><span>Email me when new games come out. You can unsubscribe any time.</span></label>
+        <button class="btn btn-brand btn-wide" type="submit" id="g-create">Create my account</button>
+      </form>
+
+      <div class="g-step" data-g="blocked" hidden>
+        <h1 class="w-title">Sorry</h1>
+        <p class="w-lede">Shanoware is only for people aged 13 and up, so an account can't be made. No account was created, and nothing about you was kept.</p>
+      </div>
+
+      <div class="g-step" data-g="offline" hidden>
+        <h1 class="w-title">You're offline</h1>
+        <p class="w-lede">Connect to the internet to sign in. Once you're signed in, your games work offline too.</p>
+        <button class="btn btn-wide" type="button" id="g-retry">Try again</button>
+      </div>
+    </div>
   </section>
 
   <!-- First launch only. -->
@@ -236,7 +305,7 @@
       <h2 id="c-title"></h2>
       <p id="c-body"></p>
       <div class="confirm-row">
-        <button class="btn" value="cancel" id="c-no" autofocus>Cancel</button>
+        <button class="btn" value="no" id="c-no" autofocus>Cancel</button>
         <button class="btn btn-danger" value="yes" id="c-yes">OK</button>
       </div>
     </form>

@@ -34,7 +34,8 @@ body {
   overscroll-behavior: none;
 }
 h1, h2, p, dl, dd { margin: 0; }
-button, input { font: inherit; color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
 img { image-rendering: pixelated; }
 ::selection { background: var(--brand); color: #fff; }
 .ico { width: 16px; height: 16px; flex: none; }
@@ -515,3 +516,19 @@ a:active { color: var(--text); }
 .doc-back { display: inline-flex; align-items: center; min-height: 44px; font: 12px/1 var(--pixel); letter-spacing: .04em; }
 .doc-center { display: grid; gap: 14px; min-height: 100dvh; align-content: center; text-align: center; }
 .doc-center .btn { text-decoration: none; }
+
+/* ---------- Sign in ---------- */
+.gate { position: fixed; inset: 0; z-index: 35; overflow-y: auto; background: var(--bg);
+  padding: max(28px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+.gate-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+.gate-brand img { image-rendering: auto; }
+.gate-brand .wordmark { font-size: 20px; }
+.g-step { display: grid; gap: 12px; animation: tab-in var(--move) var(--ease); }
+.g-step[hidden] { display: none; }
+.age { border: 0; margin: 0; padding: 0; min-width: 0; }
+select.field { appearance: none; background: var(--bg) linear-gradient(var(--muted), var(--muted)) calc(100% - 14px) 50% / 8px 2px no-repeat; padding-right: 32px; }
+.check { display: flex; align-items: flex-start; gap: 12px; min-height: 48px; padding: 12px 0; cursor: pointer; }
+.check input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--brand); }
+.g-step .splash-bar { width: 100%; }
+.confirm p { white-space: pre-line; }
+.hint.bad { color: var(--danger); }

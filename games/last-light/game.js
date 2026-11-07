@@ -681,7 +681,12 @@ function writeMeta(s,when=Date.now()){try{
   localStorage.setItem(SAVE_KEY+".meta",JSON.stringify({progress:[["Endings",found,ENDING_IDS.length],["Notes",(s.notes||[]).length,NOTES.length],["Lanterns",lan,LANTERNS.length]],totals:{Runs:s.runs||0,Escapes:s.escapes||0,Playtime:s.playtime||0},updated:when}));
 }catch(e){}}
 // A save with no summary, or an older one, gets a fresh summary without changing when it was last played.
-try{if(localStorage.getItem(SAVE_KEY)!==null){const m=JSON.parse(localStorage.getItem(SAVE_KEY+".meta")||"null"); if(!m||!m.totals) writeMeta(loadSave(),m&&typeof m.updated==="number"?m.updated:null);}}catch(e){}
+// An older save is also rewritten in full (every field present), the form cloud saves expect.
+try{const raw=localStorage.getItem(SAVE_KEY); if(raw!==null){
+  const m=JSON.parse(localStorage.getItem(SAVE_KEY+".meta")||"null"), when=m&&typeof m.updated==="number"?m.updated:null, full=JSON.stringify(loadSave());
+  if(full!==raw) localStorage.setItem(SAVE_KEY,full);
+  if(full!==raw||!m||!m.totals) writeMeta(loadSave(),when);
+}}catch(e){}
 // Only known fields with the right types survive an import, so a broken or foreign file can't wreck the game.
 function cleanSave(d){
   if(!d||typeof d!=="object"||Array.isArray(d)) return null;
