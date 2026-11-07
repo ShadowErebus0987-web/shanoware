@@ -13,7 +13,7 @@ service cloud.firestore {
     // Shano's own account, for the admin page: the User UID from Firebase console > Authentication > Users.
     // A UID reveals nothing about the person, so it is safe in this public file.
     function isAdmin() {
-      return signedIn() && request.auth.uid == '[ADMIN UID]';
+      return signedIn() && request.auth.uid == 'jTmWH9aEPQZNdo7yVMOfrVLovw43';
     }
 
     function hasExactly(d, keys) { return d.keys().hasOnly(keys) && d.keys().hasAll(keys); }

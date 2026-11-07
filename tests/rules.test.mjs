@@ -12,7 +12,7 @@ before(async () => {
     projectId: 'demo-shanoware',
     firestore: {
       host: '127.0.0.1', port: 8085,
-      rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8').replace('[ADMIN UID]', 'shano'),
+      rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8').replace(/(function isAdmin\(\) \{\s*return signedIn\(\) && request\.auth\.uid == )'[^']*'/, "$1'shano'"),
     },
   });
 });
