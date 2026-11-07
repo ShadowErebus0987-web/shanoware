@@ -29,7 +29,8 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isOwner(uid) || isAdmin();
+      allow get: if isOwner(uid);
+      allow list: if isOwner(uid) || isAdmin();   // admin page counts only
       allow create: if isOwner(uid) && validProfile(request.resource.data)
         && request.resource.data.createdAt == request.time;
       allow update: if isOwner(uid) && validProfile(request.resource.data)
@@ -39,7 +40,8 @@ service cloud.firestore {
 
       // ---------- Saves: users/{uid}/saves/{game}-{slot} ----------
       match /saves/{saveId} {
-        allow read: if isOwner(uid) || isAdmin();
+        allow get: if isOwner(uid);
+        allow list: if isOwner(uid) || isAdmin();
         // A profile (which proves the age check passed) must exist before any save.
         allow create: if isOwner(uid)
           && exists(/databases/$(database)/documents/users/$(uid))
@@ -52,7 +54,7 @@ service cloud.firestore {
 
     // Admin page: count saves per game across all players.
     match /{path=**}/saves/{saveId} {
-      allow read: if isAdmin();
+      allow list: if isAdmin();
     }
 
     // ---------- Save checks ----------

@@ -109,6 +109,12 @@ test('only the admin can count players and saves', async () => {
   await assertFails(getCountFromServer(collection(db('ann'), 'users')));
   await assertFails(getCountFromServer(query(collectionGroup(db('ann'), 'saves'), where('game', '==', 'last-light'))));
 });
+test('admin cannot open a single player\'s profile or save', async () => {
+  await withProfile('ann');
+  await env.withSecurityRulesDisabled(c => setDoc(doc(c.firestore(), 'users/ann/saves/last-light-1'), { ...save(), writtenAt: Timestamp.now() }));
+  await assertFails(getDoc(doc(db('shano', ADMIN), 'users/ann')));
+  await assertFails(getDoc(doc(db('shano', ADMIN), 'users/ann/saves/last-light-1')));
+});
 test('admin is matched by account, not by email', async () => {
   const fake = env.authenticatedContext('eve', { email: ADMIN, email_verified: true }).firestore();
   await assertFails(getCountFromServer(collection(fake, 'users')));

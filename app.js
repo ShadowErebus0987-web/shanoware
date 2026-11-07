@@ -496,6 +496,8 @@ function openGame(g, push = true) {
   paint(screen, g);
   $('g-title').textContent = g.title;
   $('g-tag').textContent = g.tagline || '';
+  $('g-warn').hidden = !g.warning;
+  $('g-warn').textContent = typeof g.warning === 'string' ? 'Warning: ' + g.warning.slice(0, 140) : '';
   const art = $('g-art');
   art.hidden = !g.art;
   if (g.art) art.src = g.art;

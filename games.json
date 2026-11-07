@@ -11,6 +11,7 @@
     },
     "font": "Silkscreen",
     "tagline": "Keep the lantern lit. The dark is patient.",
+    "warning": "Contains horror, jump scares and flashing images.",
     "saveKey": "lastlight.v1.slot",
     "legacyKey": "lastlight.v1",
     "slots": 3,
