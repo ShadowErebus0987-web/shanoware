@@ -10,7 +10,7 @@ Plain HTML/CSS/JS, installable, works offline after the first visit.
 
 1. Create an empty **public** repository on GitHub (for example `shanoware`) and push this folder to it.
 2. In the repository: **Settings → Pages → Build and deployment → Source: Deploy from a branch**, branch `main`, folder `/ (root)`.
-3. Every push to `main` is now live at `https://<username>.github.io/<repo>/`.
+3. Every push to `main` is now live at https://shanoware.com (custom domain set in Settings → Pages, DNS at Cloudflare, "DNS only").
 
 Until step 4 below is done, Shanoware runs on each device only, with no sign-in.
 
@@ -18,7 +18,7 @@ Until step 4 below is done, Shanoware runs on each device only, with no sign-in.
 
 1. Go to <https://console.firebase.google.com>, **Add project**, and stay on the free **Spark** plan (no card needed).
 2. **Build → Authentication → Get started → Sign-in method → Email/Password**: turn on **Email link (passwordless sign-in)**.
-3. **Authentication → Settings → Authorized domains**: add `<username>.github.io`.
+3. **Authentication → Settings → Authorized domains**: add `shanoware.com`.
 4. **Build → Firestore Database → Create database** (production mode, any nearby location).
 5. Open `firestore.rules` in this folder, replace `[ADMIN EMAIL]` with the email you'll sign in with, then paste the whole file into **Firestore → Rules** and **Publish**.
 6. **Firestore → Indexes → Single field → Add exemption**: collection `saves`, field `game`, tick **Collection group** ascending. (The admin page uses it to count saves per game.)
