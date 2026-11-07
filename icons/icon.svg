@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect width="16" height="16" fill="#0e0e10"/>
-  <!-- save gem: light left facet, shaded right facet -->
-  <path fill="#ecebe8" d="M7 3h1v1H7zM6 4h2v1H6zM5 5h3v1H5zM4 6h4v1H4zM4 7h4v1H4z"/>
-  <path fill="#a9a6a0" d="M8 3h1v1H8zM8 4h2v1H8zM8 5h3v1H8zM8 6h4v1H8zM8 7h4v1H8z"/>
-  <path fill="#77746f" d="M4 8h4v1H4zM5 9h3v1H5zM6 10h2v1H6zM7 11h1v1H7z"/>
-  <path fill="#4a4845" d="M8 8h4v1H8zM8 9h3v1H8zM8 10h2v1H8zM8 11h1v1H8z"/>
-  <rect x="5" y="13" width="6" height="1" fill="#2c2c31"/>
-</svg>

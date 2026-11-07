@@ -1,10 +1,10 @@
 // Bump when the SHELL list changes. File contents update on their own (stale-while-revalidate).
-const CACHE = 'savepoint-v1';
+const CACHE = 'shanoware-v1';
 const SHELL = [
-  './', 'index.html', 'style.css', 'app.js', 'games.json', 'manifest.webmanifest',
+  './', 'index.html', 'style.css', 'app.js', 'games.json', 'news.json', 'manifest.webmanifest',
   'fonts/silkscreen-400.woff2', 'fonts/silkscreen-700.woff2',
   'fonts/pixelify-400.woff2', 'fonts/pixelify-700.woff2',
-  'icons/icon-192.png', 'icons/icon-512.png'
+  'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon-32.png'
 ];
 
 self.addEventListener('install', e => {

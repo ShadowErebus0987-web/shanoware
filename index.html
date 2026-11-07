@@ -3,58 +3,99 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Save Point</title>
-  <meta name="description" content="All of my games in one place.">
-  <meta name="theme-color" content="#0e0e10">
+  <title>Shanoware</title>
+  <meta name="description" content="All of Shano's games in one place.">
+  <meta name="theme-color" content="#131114">
   <meta name="color-scheme" content="dark">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon-192.png">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="icons/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preload" href="fonts/silkscreen-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/silkscreen-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/pixelify-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
-<body data-bar="bottom">
+<body data-bar="left">
 
-  <!-- Pixel icons. A new tab may add <symbol id="i-TABID">; it is optional. -->
+  <!-- Pixel icons on an 8x8 grid. A new tab may add <symbol id="i-TABID">. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <symbol id="i-play" viewBox="0 0 8 8"><path d="M1 0h2v8H1zM3 1h2v6H3zM5 2h2v4H5zM7 3h1v2H7z" fill="currentColor"/></symbol>
+    <symbol id="i-home" viewBox="0 0 8 8"><path d="M3 0h2v1H3zM2 1h4v1H2zM1 2h6v1H1zM0 3h8v1H0zM1 4h6v4H1z M3 5h2v3H3z" fill="currentColor" fill-rule="evenodd"/></symbol>
+    <symbol id="i-library" viewBox="0 0 8 8"><path d="M0 1h2v7H0zM3 0h2v8H3zM6 2h2v6H6zM0 2h2v1H0z" fill="currentColor"/></symbol>
+    <symbol id="i-progress" viewBox="0 0 8 8"><path d="M0 5h2v3H0zM3 3h2v5H3zM6 0h2v8H6z" fill="currentColor"/></symbol>
+    <symbol id="i-profile" viewBox="0 0 8 8"><path d="M2 0h4v4H2zM1 5h6v1H1zM0 6h8v2H0z" fill="currentColor"/></symbol>
     <symbol id="i-settings" viewBox="0 0 8 8"><path d="M1 1h6v1H1zM5 0h1v3H5zM1 4h6v1H1zM2 3h1v3H2zM1 7h6v1H1zM4 6h1v2H4z" fill="currentColor"/></symbol>
     <symbol id="i-back" viewBox="0 0 8 8"><path d="M1 3h6v2H1zM2 2h1v4H2zM3 1h1v6H3z" fill="currentColor"/></symbol>
     <symbol id="i-trash" viewBox="0 0 8 8"><path d="M1 1h6v1H1zM3 0h2v1H3zM2 2h4v6H2zM3 3h1v4H3zM4 3h1v4H4z" fill="currentColor" fill-rule="evenodd"/></symbol>
+    <symbol id="i-play" viewBox="0 0 8 8"><path d="M1 0h2v8H1zM3 1h2v6H3zM5 2h2v4H5zM7 3h1v2H7z" fill="currentColor"/></symbol>
   </svg>
+
+  <!-- The tab-bar side picker, used in Settings and in the welcome. -->
+  <template id="bar-picker">
+    <div class="cross">
+      <label class="pos" style="grid-area:top"><input type="radio" value="top"><span>Top</span></label>
+      <label class="pos" style="grid-area:left"><input type="radio" value="left"><span>Left</span></label>
+      <div class="phone" aria-hidden="true"><i></i></div>
+      <label class="pos" style="grid-area:right"><input type="radio" value="right"><span>Right</span></label>
+      <label class="pos" style="grid-area:bottom"><input type="radio" value="bottom"><span>Bottom</span></label>
+    </div>
+  </template>
 
   <div class="app" id="app">
     <nav class="tabbar" id="tabbar" role="tablist" aria-label="Sections"></nav>
 
     <main class="tabs">
       <!-- To add a tab: add a <section data-tab="id" data-label="Name">. The tab bar builds itself. -->
-      <section class="tab" data-tab="play" data-label="Play">
+      <section class="tab" data-tab="home" data-label="Home">
         <header class="tab-head">
-          <h1 class="wordmark"><span class="gem" aria-hidden="true"></span>Save Point</h1>
+          <p class="wordmark wordmark-sm">Shanoware</p>
+          <h1 class="greet" id="greet"></h1>
+        </header>
+        <div id="continue"></div>
+        <section class="block" aria-labelledby="news-h">
+          <h2 class="block-h" id="news-h">What's new</h2>
+          <ul class="news" id="news" aria-live="polite"></ul>
+        </section>
+      </section>
+
+      <section class="tab" data-tab="library" data-label="Library">
+        <header class="tab-head">
+          <h1 class="title">Library</h1>
           <p class="tab-sub" id="game-count"></p>
         </header>
         <div id="library" aria-live="polite"></div>
       </section>
 
-      <section class="tab" data-tab="settings" data-label="Settings">
-        <header class="tab-head"><h1 class="wordmark">Settings</h1></header>
+      <section class="tab" data-tab="progress" data-label="Progress">
+        <header class="tab-head"><h1 class="title">Progress</h1></header>
+        <div id="progress"></div>
+      </section>
 
-        <fieldset class="group">
+      <section class="tab" data-tab="profile" data-label="Profile">
+        <header class="tab-head"><h1 class="title">Profile</h1></header>
+        <form class="group" id="name-form" novalidate>
+          <label class="legend" for="name-input">Player name</label>
+          <div class="field-row">
+            <input class="field" id="name-input" name="nickname" autocomplete="nickname" spellcheck="false" maxlength="20" required>
+            <button class="btn" type="submit">Save</button>
+          </div>
+          <p class="field-err" id="name-err" role="alert"></p>
+        </form>
+        <section class="group" aria-labelledby="totals-h">
+          <h2 class="legend" id="totals-h">Totals</h2>
+          <dl class="totals" id="totals"></dl>
+        </section>
+      </section>
+
+      <section class="tab" data-tab="settings" data-label="Settings">
+        <header class="tab-head"><h1 class="title">Settings</h1></header>
+        <fieldset class="group" id="settings-bar">
           <legend>Tab bar</legend>
           <p class="hint">Choose which side of the screen the tab bar sits on.</p>
-          <div class="cross">
-            <label class="pos" style="grid-area:top"><input type="radio" name="bar" value="top"><span>Top</span></label>
-            <label class="pos" style="grid-area:left"><input type="radio" name="bar" value="left"><span>Left</span></label>
-            <div class="phone" aria-hidden="true"><i></i></div>
-            <label class="pos" style="grid-area:right"><input type="radio" name="bar" value="right"><span>Right</span></label>
-            <label class="pos" style="grid-area:bottom"><input type="radio" name="bar" value="bottom"><span>Bottom</span></label>
-          </div>
         </fieldset>
-
-        <section class="group">
-          <h2 class="legend">About</h2>
-          <p class="hint">Save Point keeps your games and saves on this device. Saves are never sent anywhere.</p>
+        <section class="group" aria-labelledby="about-h">
+          <h2 class="legend" id="about-h">About</h2>
+          <p class="hint">Shanoware is the home for every game made by Shano. Starting with Last Light, a pixel-art horror game where your lantern is the only thing keeping the dark away.</p>
           <p class="hint">Fonts: Silkscreen and Pixelify Sans, both under the SIL Open Font License.</p>
         </section>
       </section>
@@ -64,7 +105,7 @@
   <!-- A game's screen. Its palette is set from games.json. -->
   <section class="screen" id="game" inert aria-labelledby="g-title">
     <header class="screen-bar">
-      <button class="btn btn-ghost" id="g-back" type="button"><svg class="ico"><use href="#i-back"/></svg>Games</button>
+      <button class="btn btn-ghost" id="g-back" type="button"><svg class="ico"><use href="#i-back"/></svg>Library</button>
     </header>
     <div class="screen-body">
       <div class="hero">
@@ -90,6 +131,54 @@
       </form>
     </dialog>
   </section>
+
+  <!-- First launch only. -->
+  <section class="welcome" id="welcome" hidden aria-labelledby="w-title">
+    <div class="welcome-body">
+      <ol class="steps" aria-label="Welcome steps"><li></li><li></li><li></li></ol>
+
+      <form class="w-step" data-step="0" novalidate>
+        <h1 class="w-title" id="w-title">Welcome to <span class="wordmark">Shanoware</span></h1>
+        <p class="w-lede">All of Shano's games in one place.</p>
+        <label class="legend" for="w-name">What should the games call you?</label>
+        <input class="field" id="w-name" name="nickname" autocomplete="nickname" spellcheck="false" maxlength="20" required>
+        <p class="field-err" id="w-name-err" role="alert"></p>
+        <button class="btn btn-brand btn-wide" type="submit">Next</button>
+      </form>
+
+      <div class="w-step" data-step="1" hidden>
+        <h2 class="w-title">Where should the tab bar go?</h2>
+        <p class="w-lede">Pick the side your thumb reaches best. You can change it later in Settings.</p>
+        <div id="welcome-bar"></div>
+        <div class="w-nav">
+          <button class="btn" type="button" data-go="0">Back</button>
+          <button class="btn btn-brand" type="button" data-go="2">Next</button>
+        </div>
+      </div>
+
+      <div class="w-step" data-step="2" hidden>
+        <h2 class="w-title">Controls</h2>
+        <dl class="controls">
+          <dt>Touch</dt>
+          <dd>Left thumb: the joystick moves you. Right thumb: <b>Use</b>, <b>Run</b>, <b>Pour</b>, and the lantern <b>−</b> and <b>+</b>. <b>Pause</b> sits in the top-left corner.</dd>
+          <dt>Keyboard</dt>
+          <dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> use · <kbd>F</kbd> pour · <kbd>Q</kbd><kbd>E</kbd> lantern · <kbd>Esc</kbd> pause</dd>
+          <dt>Games play sideways</dt>
+          <dd>Turn your phone when a game opens.</dd>
+        </dl>
+        <div class="w-nav">
+          <button class="btn" type="button" data-go="1">Back</button>
+          <button class="btn btn-brand" type="button" id="w-done">Start playing</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="splash" id="splash" aria-hidden="true">
+    <img src="icons/icon-512.png" alt="" width="144" height="144">
+    <p class="wordmark">Shanoware</p>
+    <i class="splash-bar"></i>
+  </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

@@ -1,6 +1,10 @@
-# Save Point
+# Shanoware
 
-A home-screen launcher for my games. Plain HTML/CSS/JS, installable, works offline after the first visit.
+All of Shano's games in one place.
+
+Shanoware is the home for every game made by Shano. Pick up where you left off, keep your saves synced across devices, track your endings and unlocks, and get new games as soon as they drop. Starting with Last Light, a pixel-art horror game where your lantern is the only thing keeping the dark away.
+
+Plain HTML/CSS/JS, installable, works offline after the first visit.
 
 ## Going live (GitHub Pages)
 
@@ -31,10 +35,19 @@ The launcher opens the game as `path?slot=N`. The game saves slot N to `saveKey 
 and writes a summary beside it (optional `legacyKey`: an older single save that is moved into Save 1) at `saveKey + N + ".meta"`:
 
 ```json
-{ "progress": [["Endings", 3, 18], ["Notes", 5, 8]], "updated": 1730000000000 }
+{ "progress": [["Endings", 3, 18], ["Notes", 5, 8]], "totals": { "Runs": 4 }, "updated": 1730000000000 }
 ```
 
 ## Adding a tab
 
 Add `<section class="tab" data-tab="id" data-label="Name">` inside `<main>` in `index.html`.
 Optionally add a matching `<symbol id="i-id">` icon. The tab bar builds itself.
+
+## Writing "What's new"
+
+Add an entry to the top of `news.json`. Give each a new `id`; the dot shows until a player opens it.
+Text is shown exactly as written (no HTML).
+
+```json
+{ "id": "2026-12-new-lantern", "date": "2026-12-01", "title": "Short title", "body": "One or two sentences." }
+```

@@ -741,13 +741,14 @@ function stopLoops(){
 /* ================= save ================= */
 function loadSave(){try{return JSON.parse(localStorage.getItem(SAVE_KEY))||{};}catch(e){return {};}}
 function writeSave(s){try{localStorage.setItem(SAVE_KEY,JSON.stringify(s)); writeMeta(s);}catch(e){}}
-// Save Point reads this summary to show progress on the save slot.
+// Shanoware reads this summary to show progress, unlocks and totals for the save slot.
 function writeMeta(s,when=Date.now()){try{
   const found=Object.keys(s.endings||{}).filter(k=>ENDING_IDS.includes(k)).length;
-  localStorage.setItem(SAVE_KEY+".meta",JSON.stringify({progress:[["Endings",found,ENDING_IDS.length],["Notes",(s.notes||[]).length,NOTES.length]],updated:when}));
+  const lan=LANTERNS.filter(l=>l.has(Object.assign({endings:{}},s))).length;
+  localStorage.setItem(SAVE_KEY+".meta",JSON.stringify({progress:[["Endings",found,ENDING_IDS.length],["Notes",(s.notes||[]).length,NOTES.length],["Lanterns",lan,LANTERNS.length]],totals:{Runs:s.runs||0,Escapes:s.escapes||0},updated:when}));
 }catch(e){}}
-// A save from before slots has no summary yet; add one without claiming it was just played.
-try{if(localStorage.getItem(SAVE_KEY)!==null&&localStorage.getItem(SAVE_KEY+".meta")===null) writeMeta(loadSave(),null);}catch(e){}
+// A save with no summary, or an older one, gets a fresh summary without changing when it was last played.
+try{if(localStorage.getItem(SAVE_KEY)!==null){const m=JSON.parse(localStorage.getItem(SAVE_KEY+".meta")||"null"); if(!m||!m.totals) writeMeta(loadSave(),m&&typeof m.updated==="number"?m.updated:null);}}catch(e){}
 // Only known fields with the right types survive an import, so a broken or foreign file can't wreck the game.
 function cleanSave(d){
   if(!d||typeof d!=="object"||Array.isArray(d)) return null;
@@ -1924,7 +1925,7 @@ const pauseMenu={sel:0,confirm:null,items:()=>[
   {label:"RESTART RUN",confirm:"RESTART? THIS RUN WILL BE LOST.",fn:begin},
   {label:"EXPORT SAVE",confirm:"SAVE A FILE TO THIS DEVICE?",fn:exportSave},
   {label:"MAIN MENU",confirm:"QUIT TO THE MAIN MENU? THIS RUN WILL BE LOST.",fn:toTitle},
-  {label:"BACK TO SAVE POINT",confirm:"LEAVE FOR SAVE POINT? THIS RUN WILL BE LOST.",fn:()=>{location.href="../../index.html#last-light";}}
+  {label:"BACK TO SHANOWARE",confirm:"LEAVE FOR SHANOWARE? THIS RUN WILL BE LOST.",fn:()=>{location.href="../../index.html#last-light";}}
 ]};
 function menuKey(m,code){
   if(m.confirm){
