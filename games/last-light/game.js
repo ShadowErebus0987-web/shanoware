@@ -979,18 +979,46 @@ function dialogKey(code){
   if(d.i<d.steps.length-1){d.i++;d.shown=0;d.sel=0;stepPanel();return;}
   G.dlg=null; if(d.onDone) d.onDone();
 }
+/* ================= UI frames: one style for every box ================= */
+// Thin border with rounded pixel corners and a faint top highlight.
+function uiFrame(g,x,y,w,h,edge,fill,hi){
+  px(g,fill||"rgba(5,5,5,.95)",x+1,y+1,w-2,h-2);
+  px(g,edge,x+2,y,w-4,1); px(g,edge,x+2,y+h-1,w-4,1); px(g,edge,x,y+2,1,h-4); px(g,edge,x+w-1,y+2,1,h-4);
+  px(g,edge,x+1,y+1); px(g,edge,x+w-2,y+1); px(g,edge,x+1,y+h-2); px(g,edge,x+w-2,y+h-2);
+  if(hi) px(g,hi,x+2,y+2,w-4,1);
+}
+// Each speaker's colour, and a 24 x 24 close-up drawn with the same code as their sprite.
+const SPEAKERS={ASH:{c:"#b48ad0"},WICK:{c:FLAME},GAUGE:{c:"#d0604a"},SMUDGE:{c:"#cfc6b0"},MOTH:{c:"#d8cfb8"},LISTENER:{c:COLD},NOTE:{c:INK2}};
+const spC=mk(48,56), spG=spC.getContext("2d");
+function speakerFace(who,x,y,t,talking){
+  ctx.imageSmoothingEnabled=false;
+  px(ctx,"#000",x,y,24,24);
+  spG.clearRect(0,0,48,56);
+  const crop=(sx,sy,sz)=>ctx.drawImage(spC,sx,sy,sz,sz,x,y,24,24);
+  if(who==="ASH"){ if(portraitImg.complete) ctx.drawImage(portraitImg,(G&&G.sludge>66?2:G&&G.sludge>33?1:0)*PN,0,PN,PN,x,y,24,24); return; }
+  if(who==="WICK"){ drawWick(spG,24,50,t); crop(12,2,24); return; }
+  if(who==="GAUGE"){ drawGauge(spG,24,24,t,talking); crop(12,12,24); return; }
+  if(who==="SMUDGE"){ drawSmudge(spG,24,36,t); crop(18,23,12); return; }
+  if(who==="MOTH"){ drawMoth(spG,24,26,t); crop(12,14,24); return; }
+  if(who==="LISTENER"){ drawListener(spG,24,40,t,talking&&Math.sin(t*18)>0); crop(17,16,12); return; }
+  if(who==="NOTE"){ px(ctx,"#cfc6a8",x+5,y+3,14,18); px(ctx,"#a89f88",x+15,y+3,4,4); for(let i=0;i<5;i++) px(ctx,"#7a7262",x+7,y+9+i*2,i===4?6:10,1); }
+}
 function renderDialog(){
-  const d=G.dlg, st=d.steps[d.i];
-  const lines=wrapText(st[1].slice(0,Math.floor(d.shown)),47);
-  const full=wrapText(st[1],47).length;
-  const ch=st[2]&&d.shown>=st[1].length?st[2]:null;
-  const h=16+Math.max(full,1)*10+(st[2]?st[2].length*10+4:0)+6, y=H-h-6, x=8, w=W-16;
-  px(ctx,"#000",x,y,w,h); px(ctx,INK,x,y,w,1); px(ctx,INK,x,y+h-1,w,1); px(ctx,INK,x,y,1,h); px(ctx,INK,x+w-1,y,1,h);
-  if(st[0]) text(ctx,st[0],x+7,y+5,1,st[0]==="NOTE"?INK2:FLAME);
-  lines.forEach((l,i)=>text(ctx,l,x+7,y+(st[0]?17:9)+i*10,1,st[0]==="NOTE"?"#cfc6a8":INK));
-  d.hits=ch?ch.map((c,i)=>{const cy=y+(st[0]?17:9)+full*10+4+i*10; return {i,y0:cy-2,y1:cy+8};}):null;
-  if(ch) ch.forEach((c,i)=>text(ctx,(i===d.sel?"> ":"  ")+c,x+13,y+(st[0]?17:9)+full*10+4+i*10,1,i===d.sel?FLAME:INK2));
-  else if(d.shown>=st[1].length&&Math.floor(titleT*2)%2===0) text(ctx,"SPACE",x+w-36,y+h-11,1,INK3);
+  const d=G.dlg, st=d.steps[d.i], who=st[0], face=!!SPEAKERS[who];
+  const n=face?42:47, full=wrapText(st[1],n), lines=wrapText(st[1].slice(0,Math.floor(d.shown)),n);
+  const done=d.shown>=st[1].length, ch=st[2]&&done?st[2]:null;
+  const top=who?18:9, body=top+Math.max(full.length,1)*10+(st[2]?st[2].length*10+4:0)+4;
+  const x=6, w=W-12, h=Math.max(face?40:0,body), y=H-h-5, tx=x+(face?40:9);
+  uiFrame(ctx,x,y,w,h,INK3,"rgba(5,5,5,.95)","#1c1a17");
+  if(face){ uiFrame(ctx,x+6,y+6,28,28,"#3a3530","#000"); speakerFace(who,x+8,y+8,titleT,!done); }
+  if(who){ const c=SPEAKERS[who]?SPEAKERS[who].c:FLAME; text(ctx,who,tx,y+6,1,c); px(ctx,"#2a2622",tx,y+14,x+w-tx-9,1); }
+  lines.forEach((l,i)=>text(ctx,l,tx,y+top+i*10,1,who==="NOTE"?"#cfc6a8":INK));
+  const cy0=y+top+full.length*10+4;
+  d.hits=ch?ch.map((c,i)=>({i,y0:cy0+i*10-2,y1:cy0+i*10+8})):null;
+  if(ch) ch.forEach((c,i)=>{ const yy=cy0+i*10, on=i===d.sel;
+    if(on){ px(ctx,"#2a1d0e",tx-2,yy-2,textW(c,1)+12,11); px(ctx,FLAME,tx-2,yy-2,1,11); }
+    text(ctx,c,tx+4,yy,1,on?FLAME:INK2); });
+  else if(done&&Math.floor(titleT*2.5)%2===0){ const ax=x+w-13, ay=y+h-9; px(ctx,FLAME,ax,ay,5,1); px(ctx,FLAME,ax+1,ay+1,3,1); px(ctx,FLAME,ax+2,ay+2,1,1); } // "next"
 }
 
 /* ================= the people: what they say ================= */
@@ -1191,7 +1219,7 @@ function introDone(){G.introPanel=null; if(EVENTS[G.ev]) toast("ev",EVENTS[G.ev]
 
 /* ================= main update ================= */
 function update(dt){
-  if(G&&G.toast){G.toast.t+=dt; if(G.toast.t>3.4) G.toast=null;}
+  if(G&&G.toast&&!G.dlg){G.toast.t+=dt; if(G.toast.t>3.4) G.toast=null;} // a hint waits until the conversation ends
   if(notice) notice.t+=dt;
   titleT+=dt;
   if(mode!=="play") return;
@@ -1782,7 +1810,7 @@ const PMIN=36, PMAX=92; let PW=PMIN;
 const faceC=mk(PN,PN), faceG=faceC.getContext("2d");
 function drawPanels(){
   for(const [g,edge] of [[plc,PW-1],[prc,0]]){ g.imageSmoothingEnabled=false; g.fillStyle=G&&mode!=="title"?"#0b0a09":"#050505"; g.fillRect(0,0,PW,H); if(G&&mode!=="title") px(g,"#1c1a17",edge,0,1,H); }
-  if(!G||mode==="title") return;
+  if(!G||mode==="title"||G.introPanel!=null) return;
   const slim=PW<60, c=Math.round(PW/2);
   // LEFT: map, lantern with fuel bar, quick slots
   const cw=slim?3:clamp(Math.floor((PW-10)/9),4,9), ch=slim?2:Math.max(3,Math.round(cw*0.66));
@@ -1839,7 +1867,7 @@ function drawPanels(){
 // Messages still appear over the room: they are short and fade.
 function drawHud(){
   // messages
-  if(G.toast){
+  if(G.toast&&!G.dlg){
     const a=G.toast.t<0.2?G.toast.t/0.2:G.toast.t>3?(3.4-G.toast.t)/0.4:1;
     ctx.globalAlpha=clamp(a,0,1);
     const w=textW(G.toast.msg,1)+12;
@@ -1918,18 +1946,25 @@ function menuKey(m,code){
   else if(code==="KeyS"||code==="ArrowDown"){m.sel=(m.sel+1)%items.length;sfx.click();}
   else if((code==="KeyA"||code==="ArrowLeft")&&it.left){it.left();sfx.click();}
   else if((code==="KeyD"||code==="ArrowRight")&&it.right){it.right();sfx.click();}
-  else if(code==="Enter"||code==="Space"){ if(it.confirm) m.confirm={msg:it.confirm,sel:1,yes:it.fn}; else it.fn(); }
+  else if(code==="Enter"||code==="Space"){ m.pressT=performance.now(); if(it.confirm) m.confirm={msg:it.confirm,sel:1,yes:it.fn}; else it.fn(); }
   else return false;
   return true;
 }
+// One look for every menu: the chosen row gets a bar, and flashes when pressed.
+function menuRow(label,cx,yy,on,pressed,minW){
+  if(on){ const rw=Math.min(W-16,Math.max(textW(label,1)+16,minW===undefined?96:minW)), rx=Math.round(cx-rw/2);
+    px(ctx,pressed?FLAME:"#2a1d0e",rx,yy-2,rw,11); px(ctx,FLAME,rx,yy-2,1,11); px(ctx,FLAME,rx+rw-1,yy-2,1,11); }
+  text(ctx,label,cx,yy,1,on?(pressed?"#140c04":FLAME):INK2,"c",on?null:"#000");
+}
 function drawMenu(m,y0){
+  const pressed=performance.now()-(m.pressT||0)<130;
   m.hits=m.items().map((it,i)=>({i,y0:y0+i*10-2,y1:y0+i*10+8}));
-  m.items().forEach((it,i)=>text(ctx,(i===m.sel?"> ":"")+it.label+(i===m.sel?"  ":""),W/2,y0+i*10,1,i===m.sel?FLAME:INK2,"c","#000"));
+  m.items().forEach((it,i)=>menuRow(it.label,W/2,y0+i*10,i===m.sel,pressed&&i===m.sel));
   if(m.confirm){
-    const w=Math.max(textW(m.confirm.msg,1)+20,120), x=Math.round(W/2-w/2), y=72;
-    px(ctx,"#000",x,y,w,40); px(ctx,INK,x,y,w,1); px(ctx,INK,x,y+39,w,1); px(ctx,INK,x,y,1,40); px(ctx,INK,x+w-1,y,1,40);
+    const w=Math.max(textW(m.confirm.msg,1)+24,140), x=Math.round(W/2-w/2), y=72;
+    uiFrame(ctx,x,y,w,42,FLAME,"rgba(5,5,5,.97)","#2a1d0e");
     text(ctx,m.confirm.msg,W/2,y+9,1,INK,"c");
-    text(ctx,(m.confirm.sel===0?"> YES":"  YES")+"      "+(m.confirm.sel===1?"> NO":"  NO"),W/2,y+25,1,FLAME,"c");
+    menuRow("YES",W/2-28,y+26,m.confirm.sel===0,false,40); menuRow("NO",W/2+28,y+26,m.confirm.sel===1,false,40);
   }
 }
 function renderTitle(){
@@ -1950,7 +1985,9 @@ function renderTitle(){
   const sv=loadSave();
   const found=Object.keys(sv.endings||{}).filter(k=>ENDING_IDS.includes(k)).length, notes=(sv.notes||[]).length;
   if(sv.runs) text(ctx,"ENDINGS "+found+"/"+ENDING_IDS.length+"   NOTES "+notes+"/"+NOTES.length+"   LANTERNS "+owned().length+"/"+LANTERNS.length,W/2,57,1,INK3,"c");
-  drawMenu(settingsOpen?setMenu:titleMenu,114);
+  const tm=settingsOpen?setMenu:titleMenu, nI=tm.items().length, mny=settingsOpen?120:106;
+  uiFrame(ctx,W/2-86,mny-7,172,nI*10+9,INK3,"rgba(5,5,5,.82)","#1c1a17");
+  drawMenu(tm,mny);
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,184,1,FLAME,"c","#000");
   else if(settingsOpen) text(ctx,["TIPS LIKE: THE LANTERN IS RUNNING LOW.","AUTO PICKS KEYBOARD OR TOUCH FOR THIS DEVICE.","CHANGE WHICH KEY DOES WHAT.","ESC: BACK"][setMenu.sel]||"",W/2,184,1,INK3,"c");
   else if(titleMenu.sel===1) text(ctx,lan.perk,W/2,184,1,INK3,"c");
@@ -1958,12 +1995,17 @@ function renderTitle(){
 }
 function renderPause(){
   px(ctx,"rgba(0,0,0,.8)",0,0,W,H);
-  text(ctx,settingsOpen?"SETTINGS":"PAUSED",W/2,26,3,INK,"c");
-  drawMenu(settingsOpen?setMenu:pauseMenu,64);
+  const pm=settingsOpen?setMenu:pauseMenu, nP=pm.items().length;
+  uiFrame(ctx,W/2-96,10,192,36+nP*10,INK3,"rgba(5,5,5,.95)","#1c1a17");
+  text(ctx,settingsOpen?"SETTINGS":"PAUSED",W/2,17,2,INK,"c");
+  px(ctx,"#2a2622",W/2-80,34,160,1);
+  drawMenu(pm,40);
   const help=touchMode()?["JOYSTICK MOVE   HOLD RUN TO RUN","SMALL BUTTONS: LANTERN   POUR   USE"]:
     [moveKeys()+" MOVE   "+K("run")+" RUN   "+K("dim")+"/"+K("bright")+" LANTERN",K("pour")+" POUR OIL   "+K("use")+" TALK / READ / USE"];
-  if(!settingsOpen){ text(ctx,help[0],W/2,128,1,INK3,"c"); text(ctx,help[1],W/2,138,1,INK3,"c"); }
-  text(ctx,"LANTERN: "+G.lan.name+(EVENTS[G.ev]?"   "+EVENTS[G.ev].replace("TONIGHT: ","").split(".")[0]:""),W/2,156,1,INK3,"c");
+  if(!settingsOpen){ const hw=Math.max(textW(help[0],1),textW(help[1],1))+20;
+    uiFrame(ctx,Math.round(W/2-hw/2),114,hw,28,"#2a2622","rgba(5,5,5,.9)");
+    text(ctx,help[0],W/2,119,1,INK3,"c"); text(ctx,help[1],W/2,129,1,INK3,"c");
+    text(ctx,"LANTERN: "+G.lan.name+(EVENTS[G.ev]?"   "+EVENTS[G.ev].replace("TONIGHT: ","").split(".")[0]:""),W/2,150,1,INK3,"c"); }
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,176,1,FLAME,"c","#000");
 }
 const endPortrait=mk(PN,PN), epg=endPortrait.getContext("2d");
@@ -1972,6 +2014,7 @@ function renderEnd(){
   px(ctx,"rgba(0,0,0,.86)",0,0,W,H);
   const k=clamp(titleT/0.6,0,1);
   ctx.globalAlpha=k;
+  uiFrame(ctx,W/2-51,11,102,102,e.cause==="won"?COLD:"#3a1414","#000");
   if(e.cause==="moth"){ faces.moth=faces.moth||scareFace("moth"); ctx.drawImage(faces.moth,W/2-48,14,96,96); }
   else {
     epg.clearRect(0,0,PN,PN);
@@ -1988,7 +2031,9 @@ function renderEnd(){
   text(ctx,e.stats,W/2,154,1,INK,"c");
   if(e.unlock) text(ctx,e.unlock,W/2,165,1,Math.floor(titleT*3)%2?FLAME:INK,"c");
   ctx.globalAlpha=1;
-  if(titleT>0.8&&Math.floor(titleT*1.6)%2===0) text(ctx,(e.cause==="won"?"ENTER: GO BACK DOWN":"ENTER: TRY AGAIN")+"   ESC: MAIN MENU",W/2,179,1,INK,"c");
+  if(titleT>0.8){ const msg=touchMode()?(e.cause==="won"?"TAP TO GO BACK DOWN":"TAP TO TRY AGAIN"):(e.cause==="won"?"ENTER: GO BACK DOWN":"ENTER: TRY AGAIN")+"   ESC: MAIN MENU", mw=textW(msg,1)+20;
+    uiFrame(ctx,Math.round(W/2-mw/2),174,mw,15,Math.floor(titleT*1.6)%2===0?FLAME:INK3,"rgba(5,5,5,.95)");
+    text(ctx,msg,W/2,178,1,INK,"c"); }
 }
 
 /* ================= keys: every action can be rebound ================= */
