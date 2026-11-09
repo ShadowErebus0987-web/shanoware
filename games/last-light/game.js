@@ -2480,7 +2480,7 @@ function renderIntroPanel(n,t){
       px(ctx,"#000",0,0,W,lid); px(ctx,"#000",0,H-lid,W,lid);
     }
   }
-  text(ctx,"ESC: SKIP",6,6,1,INK3,"l","#000");
+  text(ctx,(touchMode()?"PAUSE":K("pause"))+": SKIP",6,6,1,INK3,"l","#000");
 }
 function renderGame(){
   if(G.introPanel!=null){renderIntroPanel(G.introPanel,titleT-(G.panelAt||0)); if(G.dlg) renderDialog(); return;}
