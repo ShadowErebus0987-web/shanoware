@@ -1294,7 +1294,7 @@ function placeDiaries(){
   for(const k of G.roster){const i=next(k); if(i>=0) want.push(i);}
   for(const k of shuffled(Object.keys(WORKERS),Math.random)){const i=next(k); if(i>=0&&!want.includes(i)){want.push(i); break;}}
   if(!want.length) want.push(Math.floor(Math.random()*DIARIES.length)); // all read: an old one to find again
-  const rooms=shuffled(G.rooms.filter(r=>!r.special&&r!==G.map.start&&!r.note),Math.random).sort((a,b)=>(b.kind==="infirmary")-(a.kind==="infirmary"));
+  const rooms=shuffled(G.rooms.filter(r=>!r.special&&r!==G.map.start),Math.random).sort((a,b)=>(b.kind==="infirmary")-(a.kind==="infirmary"));
   want.forEach((i,n)=>{const r=rooms[n]; if(!r) return; const [x,y]=freeSpot(r,Math.random); r.diary={i,x:x*T+8,y:y*T+9};});
 }
 function readDiary(r){
