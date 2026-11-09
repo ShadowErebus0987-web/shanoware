@@ -74,7 +74,8 @@ service cloud.firestore {
     function validLastLight(d, m) {
       return d is map
         && d.keys().hasOnly(['runs', 'deaths', 'escapes', 'playtime', 'mostRooms', 'wickLore', 'best', 'met',
-                             'endings', 'notes', 'lastDeath', 'lastEnding', 'lastHelped', 'lantern', 'smudgeSaved', 'settings', 'journal'])
+                             'endings', 'notes', 'lastDeath', 'lastEnding', 'lastHelped', 'lantern', 'smudgeSaved', 'settings', 'journal',
+                             'diaries', 'logs'])
         && d.keys().hasAll(['runs', 'deaths', 'escapes', 'playtime', 'mostRooms', 'wickLore', 'met', 'endings', 'notes'])
         && d.runs is int && d.runs >= 0 && d.runs <= 100000
         && d.deaths is int && d.deaths >= 0 && d.deaths <= d.runs
@@ -94,6 +95,10 @@ service cloud.firestore {
         && d.endings.size() <= d.escapes
         // 8 notes exist
         && d.notes is list && d.notes.size() <= 8 && d.notes.hasOnly([0, 1, 2, 3, 4, 5, 6, 7])
+        // 21 diaries and 8 terminal tapes exist
+        && (!('diaries' in d) || (d.diaries is list && d.diaries.size() <= 21
+            && d.diaries.hasOnly([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])))
+        && (!('logs' in d) || (d.logs is list && d.logs.size() <= 8 && d.logs.hasOnly([0, 1, 2, 3, 4, 5, 6, 7])))
         && (!('lastDeath' in d) || (d.lastDeath is string && d.lastDeath.size() < 24))
         && (!('lastEnding' in d) || (d.lastEnding is string && d.lastEnding.size() < 24))
         && (!('lastHelped' in d) || (d.lastHelped is string && d.lastHelped.size() < 24))

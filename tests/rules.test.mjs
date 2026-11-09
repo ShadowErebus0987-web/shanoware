@@ -92,6 +92,15 @@ test('refuses a journal photo of something never met, or an unknown creature', a
   const bad3 = llData({ journal: { seen: [], photos: [], cheats: true } });
   for (const d of [bad1, bad2, bad3]) await assertFails(setDoc(doc(db('ann'), 'users/ann/saves/last-light-1'), save(d)));
 });
+test('accepts a save with diaries and terminal tapes', async () => {
+  await withProfile('ann');
+  await assertSucceeds(setDoc(doc(db('ann'), 'users/ann/saves/last-light-1'), save(llData({ diaries: [0, 4, 20], logs: [0, 7] }))));
+});
+test('refuses diaries or tapes that do not exist', async () => {
+  await withProfile('ann');
+  for (const d of [llData({ diaries: [21] }), llData({ logs: [8] }), llData({ diaries: 'all' }), llData({ logs: [0, 1, 2, 3, 4, 5, 6, 7, 7] }), llData({ diaries: [-1] })])
+    await assertFails(setDoc(doc(db('ann'), 'users/ann/saves/last-light-1'), save(d)));
+});
 test('refuses progress that does not match the save', async () => {
   await withProfile('ann');
   const d = llData();

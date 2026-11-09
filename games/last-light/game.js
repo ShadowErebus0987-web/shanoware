@@ -31,7 +31,7 @@ const JIDS=["moth","listener","roughneck","tarling","knocker","smother","tenant"
 const ZONES=[
   {id:"storage",name:"STORAGE",tag:"STORAGE",floor:"#1f1f1e",mc:"#6f685c",kinds:[["plain",50],["storage",20],["rats",15],["lockers",15]]},
   {id:"barracks",name:"THE BARRACKS",tag:"BARRACKS",floor:"#22201c",mc:"#6e5f50",kinds:[["dorm",35],["lockers",30],["chapel",15],["plain",20]]},
-  {id:"offices",name:"THE OFFICES",tag:"OFFICES",floor:"#241f19",mc:"#6a6458",kinds:[["office",50],["plain",35],["chapel",15]]},
+  {id:"offices",name:"THE OFFICES",tag:"OFFICES",floor:"#241f19",mc:"#6a6458",kinds:[["office",45],["plain",30],["chapel",15],["terminal",10]]},
   {id:"pump",name:"THE PUMP HOUSE",tag:"PUMPS",floor:"#1d221d",mc:"#56665a",kinds:[["pump",45],["plain",40],["flooded",15]]},
   {id:"boiler",name:"THE BOILER WORKS",tag:"BOILERS",floor:"#271c17",mc:"#73574a",kinds:[["boiler",50],["plain",50]]},
   {id:"sump",name:"THE FLOODED SUMP",tag:"SUMP",floor:"#1a2022",mc:"#4f6266",kinds:[["flooded",55],["nest",20],["rats",10],["plain",15]]},
@@ -802,6 +802,44 @@ const NOTES=[
   "MY GIRL KEEPS ASKING ABOUT THE SUN. I TOLD HER TOMORROW. -T.",
   "IF YOU'RE READING THIS: THE HATCH MOVES. DON'T TRUST THE SAME ROOM TWICE."
 ];
+// The sludge is an infection. Each of the infected was someone; their diaries go from coughing to barely readable.
+const WORKERS={roughneck:"EARL",tarling:"TILLY",knocker:"JUDD",smother:"SILAS",tenant:"MAE",firedamp:"OWEN",timekeeper:"HOLLIS"};
+const DIARIES=[
+  ["roughneck","DAY ONE PAST 900 FEET. THE BIT CAME UP COATED IN SOMETHING BLACK AND SOFT. FOREMAN SAYS KEEP DRILLING. GOT A COUGH I CAN'T SHIFT. -EARL"],
+  ["roughneck","MY FINGERNAILS WENT BLACK. SCRUBBED THEM TILL THEY BLED. MY KNEES WANT TO BEND THE WRONG WAY. I KEEP MY RED VEST ON SO THE BOYS KNOW IT'S ME. -EARL"],
+  ["roughneck","CANT STAND STRAIGHT. FLOOR IS BETTER. KEEP THE WRENCH. ANYTHING THAT MOVES, I SEE IT. DONT MOVE. DO-NT MO-E. -E--L"],
+  ["tarling","PUMPING OUT THE SUMP AGAIN. THE WATER'S GONE THICK LIKE TAR. IT SITS STILL WHEN YOU LOOK AT IT. COUGHING ALL SHIFT. -TILLY"],
+  ["tarling","COUGHED SOMETHING BLACK INTO MY HAND. IT SLID OFF AND CRAWLED TO THE PUDDLE BY THE PUMP. MY NAILS ARE BLACK NOW TOO. -TILLY"],
+  ["tarling","SO TIRED. THE PUDDLE IS WARM. IT KNOWS THE BLACK IN ME. LIE DOWN. LIE FLAT. W-IT FOR TH-M. -T--LY"],
+  ["knocker","ME AND AMOS PATCHED THE STEAM LINE ON B LEVEL. WHEN YOU TAP THE PIPE SOMETHING KNOCKS BACK. AMOS LAUGHED. I DIDN'T. -JUDD"],
+  ["knocker","AMOS PUT HIS ARM IN THE BROKEN PIPE TO FEEL FOR THE CLOG. HE SAYS IT'S WARM IN THERE. HE WON'T TAKE IT OUT. HIS HAND IS GREY. -JUDD"],
+  ["knocker","WE FIT NOW. ME AND AMOS AND THE PIPE. TURN THE RED WHEELS IF YOU WANT US QUIET. KNOCK KNOCK. KN-CK. -J-DD"],
+  ["smother","TRIMMED EVERY LAMP ON THE NIGHT SHIFT. THE DARK DOWN HERE IS HUNGRY. I KEEP THEM ALL BURNING. I ALWAYS HAVE. -SILAS"],
+  ["smother","EVERY LAMP I TOUCH GOES DIM. MY SHADOW IS TOO BIG FOR ME. BLACK UNDER MY NAILS. I'M COLD UNLESS I'M NEXT TO A FLAME. -SILAS"],
+  ["smother","PUT YOUR LIGHT OUT. PUT IT OUT. I'M SO HUNGRY FOR IT. STAND STILL IN THE DARK AND I WON'T F-ND Y-U. -S---S"],
+  ["tenant","SICK BAY IS FULL. HALF THE CREW COUGHS BLACK. I SLEEP IN THE LOCKER ROOM NOW, IT'S QUIETER. NOBODY KNOCKS. -MAE"],
+  ["tenant","OPENED MY LOCKER AND SOMEONE WAS ALREADY IN IT. THEY HAD MY FACE. I SHUT IT. THE FLIES WON'T LEAVE ME ALONE. -MAE"],
+  ["tenant","THIS ONE IS MINE. FIND YOUR OWN. YOU CAN SEE MY EYES THROUGH THE CRACK. D-N'T COME IN. DON'T. -M-E"],
+  ["firedamp","GAS READINGS HIGH AT 900. TOLD THEM NO OPEN FLAME BELOW B LEVEL. NOBODY LISTENS TO THE GAS MAN. -OWEN"],
+  ["firedamp","BREATHED TOO MUCH OF IT CHECKING THE SEAM. BLACK FINGERNAILS, GREEN BREATH. MY SKIN SMELLS LIKE THE DEEP. -OWEN"],
+  ["firedamp","I AM THE GAS NOW. KEEP YOUR LAMP LOW, LITTLE LIGHT. ONE SPARK AND WE BOTH G- UP. B-TH. -O-EN"],
+  ["timekeeper","SHIFT BOSS'S LOG. THREE MEN LATE, TWO MISSING, ALL DOCKED. EVERY MAN CLOCKS IN. EVERY MAN STAYS ON SHIFT. -HOLLIS"],
+  ["timekeeper","THE CLOCK IN MY OFFICE RUNS BACKWARDS SINCE WE HIT THE BLACK. NO MAN LOAFS ON MY TIME. I WATCH THEM ALL. ALL. -HOLLIS"],
+  ["timekeeper","YOU HAVE STAYED TOO LONG. TOO LONG IN ONE ROOM. I WILL CLOCK YOU IN. TICK. TICK. T-CK. -H-LL-S"]
+];
+const diaryNo=i=>DIARIES.slice(0,i+1).filter(d=>d[0]===DIARIES[i][0]).length; // 1 to 3, early to late
+// Terminal tapes. The colour says who is talking: orange the crew, purple the sludge, blue management, yellow a warning.
+const LOG_C={crew:"#e8a94a",sludge:"#b07ad8",boss:"#7aa8d8",warn:"#e8d84a"}, LOG_NAME={crew:"CREW LOG",sludge:"THE SLUDGE",boss:"MANAGEMENT",warn:"WARNING"};
+const LOGS=[
+  ["warn","WARNING. GAS AT THE 900 FOOT SEAM. NO OPEN FLAME. KEEP LAMPS LOW NEAR THE SEAM."],
+  ["crew","CREW LOG, DAY 1. REACHED 900 FEET. THE BIT CAME UP COATED IN SOMETHING BLACK. IT SMELLS LIKE A STRUCK MATCH."],
+  ["boss","MEMO FROM THE BOARD. PRODUCTION CONTINUES. SICK MEN WILL BE DOCKED A DAY'S PAY. NOBODY TALKS TO THE PAPERS."],
+  ["crew","CREW LOG, DAY 6. HALF THE CREW IN SICK BAY, COUGHING, BLACK NAILS. THE OTHER HALF WON'T STOP DIGGING."],
+  ["sludge","WE WERE ASLEEP UNDER THE ROCK. YOU WOKE US. NOW WE ARE IN YOUR LUNGS, YOUR LAMPS AND YOUR PIPES."],
+  ["warn","WARNING. STEAM LINES BROKEN ON EVERY LEVEL. TURN THE RED VALVE WHEELS TO SEAL THEM. KEEP YOUR HANDS OUT OF THE PIPES."],
+  ["boss","MEMO. SEAL LEVELS B TO D. ANY CREW STILL BELOW ARE TO BE LISTED AS HAVING QUIT."],
+  ["sludge","LET THE LIGHT GO OUT, LITTLE ONE. IT IS WARM IN THE DARK. EVERYONE IS HERE. EVERYONE."]
+];
 const EXIT_NAME={hatch:"THE HATCH",lift:"GOING UP",chimney:"BACK THE WAY YOU CAME",drain:"WASHED OUT"};
 const VAR_NAME={alone:"ALONE",lamp:"THE FOREMAN'S LAMP",quiet:"QUIET SHIFT",sun:"TWO FOR THE SUNRISE"};
 const EXIT_TEXT={
@@ -985,6 +1023,8 @@ function cleanSave(d){
   out.met={}; if(d.met&&typeof d.met==="object") for(const k of ["wick","gauge","smudge","moth","lis"]) if(d.met[k]) out.met[k]=1;
   out.endings={}; if(d.endings&&typeof d.endings==="object") for(const k of Object.keys(d.endings)) if(ENDING_IDS.includes(k)) out.endings[k]=1;
   out.notes=Array.isArray(d.notes)?[...new Set(d.notes.filter(i=>Number.isInteger(i)&&i>=0&&i<NOTES.length))]:[];
+  const ids=(a,n)=>Array.isArray(a)?[...new Set(a.filter(i=>Number.isInteger(i)&&i>=0&&i<n))]:[];
+  out.diaries=ids(d.diaries,DIARIES.length); out.logs=ids(d.logs,LOGS.length);
   for(const k of ["lastDeath","lastEnding","lastHelped","lantern"]) if(typeof d[k]==="string"&&d[k].length<24) out[k]=d[k];
   if(d.smudgeSaved===true) out.smudgeSaved=true;
   // journal: only known creatures, no repeats, and a photo only of something already met
@@ -1066,7 +1106,8 @@ function newGame(){
   // the Moth and the Listener every night, plus three or four of the infected; up to two more Moths later on
   G.moths=[G.moth]; G.mothPlan=[{at:300+Math.random()*180,v:1},{at:660+Math.random()*240,v:2}].filter((x,i)=>Math.random()<(i?0.45:0.65));
   G.roster=EA?shuffled(FOES,Math.random).slice(0,Math.random()<0.5?3:4):[]; G.foes=[]; G.foes=placeFoes();
-  G.roomT=0; G.tickT=0; G.graceIn=0; G.hide=null; G.struggle=null;
+  G.roomT=0; G.tickT=0; G.graceIn=0; G.hide=null; G.struggle=null; G.video=null; G.jSub=0;
+  placeDiaries();
   G.distCur=bfs(rooms,G.room);
 }
 
@@ -1247,6 +1288,92 @@ function placeFoes(){
   }
   return out;
 }
+// Tonight's diaries: the next unread page of each worker out tonight, plus one more; the infirmary gets one first.
+function placeDiaries(){
+  const s=G.save, next=k=>DIARIES.findIndex((d,i)=>d[0]===k&&!s.diaries.includes(i)), want=[];
+  for(const k of G.roster){const i=next(k); if(i>=0) want.push(i);}
+  for(const k of shuffled(Object.keys(WORKERS),Math.random)){const i=next(k); if(i>=0&&!want.includes(i)){want.push(i); break;}}
+  if(!want.length) want.push(Math.floor(Math.random()*DIARIES.length)); // all read: an old one to find again
+  const rooms=shuffled(G.rooms.filter(r=>!r.special&&r!==G.map.start&&!r.note),Math.random).sort((a,b)=>(b.kind==="infirmary")-(a.kind==="infirmary"));
+  want.forEach((i,n)=>{const r=rooms[n]; if(!r) return; const [x,y]=freeSpot(r,Math.random); r.diary={i,x:x*T+8,y:y*T+9};});
+}
+function readDiary(r){
+  const i=r.diary.i;
+  if(!G.save.diaries.includes(i)){G.save.diaries.push(i); writeSave(G.save);}
+  dialog([["DIARY",DIARIES[i][1]]],()=>toast("diary","DIARIES GO IN THE JOURNAL. "+K("journal")+" TO READ THEM."));
+}
+const linkedDiaries=k=>DIARIES.map((d,i)=>i).filter(i=>DIARIES[i][0]===k&&G.save.diaries.includes(i));
+
+// The terminal: the tube warms up white, a worker in an orange vest, hard hat and glasses,
+// then the crew drilling down until they hit the sludge, then the tape's words.
+const VT={on:0.5,face:3.0,drill:7.4};
+function useTerminal(){
+  const r=G.room, s=G.save;
+  if(r.logI===undefined){const un=LOGS.map((l,i)=>i).filter(i=>!s.logs.includes(i)&&!G.rooms.some(o=>o.logI===i)); r.logI=un.length?un[0]:Math.floor(Math.random()*LOGS.length);}
+  G.video={i:r.logI,t:0,shown:0,beat:0}; tone({f0:60,f1:64,dur:1.2,gain:0.05}); nz({dur:0.4,freq:5200,q:2,gain:0.04});
+}
+function updVideo(dt){
+  const v=G.video, was=v.t; v.t+=dt;
+  if(v.t>VT.face&&v.t<VT.drill&&(v.beat-=dt)<=0){v.beat=0.3; nz({dur:0.18,freq:160,type:"lowpass",gain:0.12});} // the drill
+  if(was<VT.face+3&&v.t>=VT.face+3) sfx.rumble(); // it hits the sludge
+  if(v.t<VT.drill) return;
+  if(!G.save.logs.includes(v.i)){G.save.logs.push(v.i); writeSave(G.save);}
+  const n=LOGS[v.i][1].length, before=Math.floor(v.shown); v.shown=Math.min(n,v.shown+dt*34);
+  if(Math.floor(v.shown)!==before&&Math.floor(v.shown)%3===0) nz({dur:0.02,freq:2600,q:6,gain:0.03});
+}
+function videoKey(){
+  const v=G.video, n=LOGS[v.i][1].length;
+  if(v.t<VT.drill){v.t=VT.drill; return;}
+  if(v.shown<n){v.shown=n; return;}
+  G.video=null; sfx.out();
+}
+function videoWorker(X,Y,SW,tt){
+  const s=4, cx=Math.round(X+SW/2), top=Y+12, P=(x,y,w,h,c)=>px(ctx,c,cx+x*s,top+y*s,w*s,h*s);
+  P(-11,20,22,8,"#e8742a"); P(-3,20,6,8,"#3a4a5a"); P(-11,22,22,1,"#e8e4dc"); P(-11,25,22,1,"#e8e4dc"); // orange vest, reflective stripes
+  P(-2,17,4,3,"#c8a088"); P(-6,6,12,12,"#d8b094"); P(-6,16,12,2,"#c8a088"); // neck and face
+  P(-8,3,16,4,"#e8d23a"); P(-7,1,14,2,"#e8d23a"); P(-9,6,18,1,"#c8b030"); P(-3,1,6,1,"#fff4a0"); // hard hat
+  P(-5,10,4,3,"#2a2622"); P(1,10,4,3,"#2a2622"); P(-1,11,2,1,"#2a2622"); P(-4,11,2,1,"#cfe0e3"); P(2,11,2,1,"#cfe0e3"); // glasses
+  P(-5,9,3,1,"#6a4a30"); P(2,9,3,1,"#6a4a30"); P(-2,15,4,Math.sin(tt*16)>0?2:1,"#5a2a22"); // brows, talking
+}
+function videoDrill(X,Y,SW,SH,tt){
+  const ground=Y+34, cx=Math.round(X+SW/2), seam=Y+SH-12, hit=3, k=clamp(tt/hit,0,1), bh=Math.ceil((seam-ground)/6);
+  px(ctx,"#cfd8dc",X,Y,SW,ground-Y);
+  ["#6a5a44","#5a4a38","#4a3e30","#3e3428","#30281f","#241e18"].forEach((c,i)=>px(ctx,c,X,ground+i*bh,SW,bh));
+  px(ctx,"#060508",X,seam,SW,Y+SH-seam); for(let i=0;i<SW;i+=7) px(ctx,"#141220",X+i,seam-1,4,1);
+  for(let y=Y+6;y<ground;y++){const w=Math.round((y-Y-6)*0.5); px(ctx,"#2a2622",cx-w,y,1,1); px(ctx,"#2a2622",cx+w,y,1,1);} // the derrick
+  for(let y=Y+10;y<ground;y+=5) px(ctx,"#2a2622",cx-Math.round((y-Y-6)*0.5),y,Math.round((y-Y-6))+1,1);
+  for(const fx of [cx-34,cx+26]){px(ctx,"#e8742a",fx,ground-8,4,5); px(ctx,"#d8b094",fx+1,ground-11,2,3); px(ctx,"#e8d23a",fx,ground-12,4,1); px(ctx,"#3a4a5a",fx,ground-3,4,3);} // the crew
+  const tip=ground+Math.round((seam-ground)*k); px(ctx,"#8a8270",cx-1,ground,3,tip-ground); px(ctx,"#c8c0b0",cx-2,tip-2,5,3);
+  text(ctx,"DEPTH "+String(Math.round(900*k)).padStart(3,"0")+" FT",X+6,Y+5,1,"#3a3530");
+  if(tt>hit){ // and up it comes
+    const b=clamp((tt-hit)/0.8,0,1), top=seam-Math.round((seam-ground+18)*b);
+    px(ctx,"#060508",cx-3,top,7,seam-top);
+    if(b>=1){ ctx.fillStyle="#060508"; ctx.beginPath(); ctx.ellipse(cx,ground-14,10+(tt-hit-0.8)*14,8,0,0,7); ctx.fill();
+      for(let i=0;i<9;i++){const a=i*0.7+tt*2; px(ctx,"#060508",Math.round(cx+Math.cos(a)*(14+i*3)),Math.round(ground-16+Math.sin(a)*6+(tt*20+i*7)%20),2,2);} }
+    if(Math.random()<0.25) px(ctx,"rgba(0,0,0,.4)",X,Y,SW,SH);
+  }
+}
+function renderVideo(){
+  const v=G.video, t=v.t, L=LOGS[v.i], X=24, Y=10, SW=W-48, SH=H-64;
+  px(ctx,"#050505",0,0,W,H);
+  uiFrame(ctx,X-6,Y-6,SW+12,SH+12,"#3a3530","#141210");
+  ctx.save(); ctx.beginPath(); ctx.rect(X,Y,SW,SH); ctx.clip();
+  if(t<VT.on){const k=t/VT.on, h=Math.max(1,Math.round(SH*k*k)); px(ctx,"#000",X,Y,SW,SH); px(ctx,"#f4f0e6",X,Y+Math.round((SH-h)/2),SW,h);}
+  else if(t<VT.face){ px(ctx,"#ece8dc",X,Y,SW,SH); for(let i=0;i<60;i++) px(ctx,"rgba(0,0,0,.07)",X+Math.floor(Math.random()*SW),Y+Math.floor(Math.random()*SH),2,1);
+    text(ctx,"CREW BRIEFING",X+6,Y+5,1,"#8a8270"); if(Math.sin(t*6)>0){px(ctx,"#c4473a",X+SW-26,Y+6,4,4); text(ctx,"REC",X+SW-20,Y+5,1,"#8a8270");}
+    videoWorker(X,Y,SW,t-VT.on); }
+  else { videoDrill(X,Y,SW,SH,Math.min(t,VT.drill+2)-VT.face); if(t>=VT.drill) px(ctx,"rgba(0,0,0,.35)",X,Y,SW,SH); }
+  for(let y=Y;y<Y+SH;y+=2) px(ctx,"rgba(0,0,0,.18)",X,y,SW,1); // scan lines
+  if(Math.random()<0.3) px(ctx,"rgba(255,255,255,.12)",X,Y+Math.floor(Math.random()*SH),SW,1); // tape noise
+  ctx.restore();
+  const use=touchMode()?"USE":K("use");
+  if(t>=VT.drill){ // the words, in the colour of who said them
+    let left=Math.floor(v.shown);
+    wrapText(L[1],50).forEach((l,i)=>{ if(left>0) text(ctx,l.slice(0,left),W/2-textW(l,1)/2,H-44+i*9,1,LOG_C[L[0]]); left-=l.length+1; });
+    if(v.shown>=L[1].length) text(ctx,use+": TURN IT OFF",W/2,H-9,1,INK3,"c");
+  } else text(ctx,use+": SKIP",W-8,H-9,1,INK3,"r");
+}
+
 function foesOnEnter(r){
   G.roomT=0; G.graceIn=1.2; G.tickT=0;
   G.foes=G.foes.filter(f=>f.k!=="timekeeper"); // he never follows you out
@@ -1596,7 +1723,7 @@ function uiFrame(g,x,y,w,h,edge,fill,hi){
   if(hi) px(g,hi,x+2,y+2,w-4,1);
 }
 // Each speaker's colour, and a 24 x 24 close-up drawn with the same code as their sprite.
-const SPEAKERS={ASH:{c:"#b48ad0"},WICK:{c:FLAME},GAUGE:{c:"#d0604a"},SMUDGE:{c:"#cfc6b0"},MOTH:{c:"#d8cfb8"},LISTENER:{c:COLD},NOTE:{c:INK2}};
+const SPEAKERS={ASH:{c:"#b48ad0"},WICK:{c:FLAME},GAUGE:{c:"#d0604a"},SMUDGE:{c:"#cfc6b0"},MOTH:{c:"#d8cfb8"},LISTENER:{c:COLD},NOTE:{c:INK2},DIARY:{c:"#cfc6a8"}};
 const spC=mk(48,56), spG=spC.getContext("2d");
 function speakerFace(who,x,y,t,talking){
   ctx.imageSmoothingEnabled=false;
@@ -1609,6 +1736,7 @@ function speakerFace(who,x,y,t,talking){
   if(who==="SMUDGE"){ drawSmudge(spG,24,36,t); crop(18,23,12); return; }
   if(who==="MOTH"){ drawMoth(spG,24,26,t); crop(12,14,24); return; }
   if(who==="LISTENER"){ drawListener(spG,24,40,t,talking&&Math.sin(t*18)>0); crop(17,16,12); return; }
+  if(who==="DIARY"){ px(ctx,"#3b2b1b",x+4,y+4,16,17); px(ctx,"#5a4228",x+4,y+4,16,2); px(ctx,"#cfc6a8",x+18,y+6,2,14); px(ctx,"#7a2a22",x+11,y+4,2,20); return; }
   if(who==="NOTE"){ px(ctx,"#cfc6a8",x+5,y+3,14,18); px(ctx,"#a89f88",x+15,y+3,4,4); for(let i=0;i<5;i++) px(ctx,"#7a7262",x+7,y+9+i*2,i===4?6:10,1); }
 }
 function renderDialog(){
@@ -1620,7 +1748,7 @@ function renderDialog(){
   uiFrame(ctx,x,y,w,h,INK3,"rgba(5,5,5,.95)","#1c1a17");
   if(face){ uiFrame(ctx,x+6,y+6,28,28,"#3a3530","#000"); speakerFace(who,x+8,y+8,titleT,!done); }
   if(who){ const c=SPEAKERS[who]?SPEAKERS[who].c:FLAME; text(ctx,who,tx,y+6,1,c); px(ctx,"#2a2622",tx,y+14,x+w-tx-9,1); }
-  lines.forEach((l,i)=>text(ctx,l,tx,y+top+i*10,1,who==="NOTE"?"#cfc6a8":INK));
+  lines.forEach((l,i)=>text(ctx,l,tx,y+top+i*10,1,who==="NOTE"||who==="DIARY"?"#cfc6a8":INK));
   const cy0=y+top+full.length*10+4;
   d.hits=ch?ch.map((c,i)=>({i,y0:cy0+i*10-2,y1:cy0+i*10+8})):null;
   if(ch) ch.forEach((c,i)=>{ const yy=cy0+i*10, on=i===d.sel;
@@ -1843,6 +1971,7 @@ function update(dt){
   }
   if(G.slide){G.slide.t+=dt/0.32; if(G.slide.t>=1) G.slide=null; return;}
   if(G.dlg){updDialog(dt); return;}            // talking stops the clock
+  if(G.video){updVideo(dt); return;}            // so does watching a tape
   if(G.ui) return;                              // so do the bag and the journal
   if(G.struggle){updStruggle(dt); return;}      // the struggle holds everything else still
 
@@ -2058,7 +2187,6 @@ function updTurn(dt){
   if(n===3){G.sealed[r.zone]=true; sfx.thud(); tell("ALL THREE SHUT. THE BROKEN PIPES GO QUIET.");}
   else tell(n+" OF 3 WHEELS SHUT.");
 }
-function useTerminal(){ sfx.click(); tell("THE SCREEN IS ALL STATIC. THE TAPE DECK IS EMPTY."); }
 function lookHole(){ tell("900 FEET DOWN. SOMETHING DOWN THERE BREATHES."); }
 function drawRoomProps(r,t){
   if(r.valves) for(const v of r.valves){ // the wheels turn while you turn them
@@ -2184,6 +2312,7 @@ function render(){
   else if(G){
     renderGame();
     ctx.setTransform(1,0,0,1,0,0);
+    if(G.video) renderVideo();
     if(G.cam&&mode!=="end") renderCamera();
     if(G.ui==="inv") renderInv(); else if(G.ui==="journal") renderJournal();
     if(mode==="pause") renderPause();
@@ -2211,6 +2340,7 @@ function interactables(){
   if(r.special==="smudge"&&!G.smudge.follow) out.push({x:OBJ.x,y:OBJ.y+4,fn:talkSmudge});
   if(G.smudge.follow) out.push({x:G.smudge.x,y:G.smudge.y,fn:talkSmudge,low:true});
   if(r.note) out.push({x:r.note.x,y:r.note.y,fn:()=>readNote(r)});
+  if(r.diary) out.push({x:r.diary.x,y:r.diary.y,fn:()=>readDiary(r)});
   for(const c of r.crates) if(!c.open||c.item) out.push({x:c.x,y:c.y+6,fn:()=>openCrate(r,c)});
   if(r.valves&&!G.turn) for(const v of r.valves) if(!v.shut) out.push({x:v.x,y:T+10,fn:()=>startTurn(r,v)});
   if(r.term) out.push({x:r.term.x,y:3*T+6,fn:useTerminal});
@@ -2394,6 +2524,7 @@ function renderGame(){
   if(G.doorShut&&G.doorShut.room===rm){const d=G.doorShut.dir, D=DOOR[d], hor=d==="n"||d==="s"; for(let k=0;k<6;k++) hor?px(ctx,"#3a3530",D.x-16+k*6,d==="n"?0:H-T,3,T):px(ctx,"#3a3530",d==="w"?0:W-T,D.y-16+k*6,T,3);}
   for(const m of G.motes) px(ctx,"rgba(217,207,184,.22)",Math.round(m.x),Math.round(m.y));
   for(const s2 of G.steam) px(ctx,"rgba(150,145,135,"+(s2.life/1.6*0.5)+")",Math.round(s2.x),Math.round(s2.y),s2.w||2,s2.w||2);
+  if(rm.diary){const n=rm.diary; px(ctx,"#3b2b1b",n.x-4,n.y-3,8,6); px(ctx,"#5a4228",n.x-4,n.y-3,8,1); px(ctx,"#cfc6a8",n.x+3,n.y-2,1,4); px(ctx,"#7a2a22",n.x-1,n.y-3,1,7);} // a diary, a ribbon in it
   if(rm.note){const n=rm.note; px(ctx,"#cfc6a8",n.x-3,n.y-2,6,5); px(ctx,"#8a8170",n.x-2,n.y-1,4,1); px(ctx,"#8a8170",n.x-2,n.y+1,3,1);}
   for(const c of rm.scrip){px(ctx,"#8a6a2a",c.x-1,c.y-1,3,3); px(ctx,"#c9a04a",c.x-1,c.y-1,2,2); px(ctx,"#f0d080",c.x-1,c.y-1);}
   // floor items
@@ -2900,8 +3031,10 @@ function uiKey(code){
   if(G.ui==="journal"){
     if(code==="KeyB"||code==="Escape"){G.ui=null;return;}
     const n=journalEntries().length;
-    if(code==="KeyW"||code==="ArrowUp"){G.jSel=(G.jSel+n-1)%n; sfx.click();}
-    if(code==="KeyS"||code==="ArrowDown"){G.jSel=(G.jSel+1)%n; sfx.click();}
+    if(code==="KeyW"||code==="ArrowUp"){G.jSel=(G.jSel+n-1)%n; G.jSub=0; sfx.click();}
+    if(code==="KeyS"||code==="ArrowDown"){G.jSel=(G.jSel+1)%n; G.jSub=0; sfx.click();}
+    const lr={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1}[code], e=journalEntries()[G.jSel], m=e.kind==="enemy"&&e.seen?linkedDiaries(e.b.id).length:0;
+    if(lr&&m){G.jSub=((G.jSub||0)+lr+m+1)%(m+1); sfx.click();}
   }
 }
 function uiTap(x,y){
@@ -2911,7 +3044,8 @@ function uiTap(x,y){
     const u=G.invUseHit; if(u&&x>=u.x&&x<u.x+u.w&&y>=u.y-2&&y<u.y+u.h) uiKey("Space");
     return;
   }
-  const h=(G.jHits||[]).find(h=>x<158&&y>=h.y0&&y<h.y1); if(h){G.jSel=h.i; sfx.click();}
+  const h=(G.jHits||[]).find(h=>x<158&&y>=h.y0&&y<h.y1); if(h){G.jSel=h.i; G.jSub=0; sfx.click(); return;}
+  if(x>=162) uiKey("KeyD"); // a tap on the right-hand page turns to the next diary page, if there is one
 }
 // ---------- the journal: one page per creature, plus the notes ----------
 const EA=typeof ENEMY_ART!=="undefined"?ENEMY_ART:null;
@@ -2940,7 +3074,9 @@ function journalPhoto(id){
 function journalEntries(){
   const s=G.save, J=s.journal;
   return [...BESTIARY.map(b=>({kind:"enemy",b,seen:J.seen.includes(b.id),photo:J.photos.includes(b.id)})),
-          ...NOTES.map((t,i)=>({kind:"note",i,found:s.notes.includes(i)}))];
+          ...NOTES.map((t,i)=>({kind:"note",i,found:s.notes.includes(i)})),
+          ...DIARIES.map((d,i)=>({kind:"diary",i,found:s.diaries.includes(i)})),
+          ...LOGS.map((l,i)=>({kind:"log",i,found:s.logs.includes(i)}))];
 }
 const jpC=mk(64,64), jpG=jpC.getContext("2d");
 function bestiaryPic(b,x,y,shadow){
@@ -2953,19 +3089,33 @@ function renderJournal(){
   const E=journalEntries(); G.jSel=clamp(G.jSel,0,E.length-1);
   for(const x of [10,162]) uiFrame(ctx,x,6,148,H-12,"#3a3026","#141008","#2a2014");
   text(ctx,"JOURNAL",84,12,1,FLAME,"c");
-  const rows=14, start=clamp(G.jSel-7,0,Math.max(0,E.length-rows)); G.jHits=[];
+  const rows=13, start=clamp(G.jSel-6,0,Math.max(0,E.length-rows)); G.jHits=[];
   for(let k=0;k<rows&&start+k<E.length;k++){
     const i=start+k, e=E[i], y=26+k*10, on=i===G.jSel;
-    const label=e.kind==="enemy"?(e.seen?e.b.name:"???"):(e.found?"NOTE "+(e.i+1):"NOTE ???");
+    const label=e.kind==="enemy"?(e.seen?e.b.name:"???"):e.kind==="diary"?(e.found?"DIARY: "+WORKERS[DIARIES[e.i][0]]+" "+diaryNo(e.i):"DIARY ???")
+      :e.kind==="log"?(e.found?"TAPE "+(e.i+1)+": "+LOG_NAME[LOGS[e.i][0]]:"TAPE ???"):(e.found?"NOTE "+(e.i+1):"NOTE ???");
     if(on){ px(ctx,"#2a1d0e",16,y-2,136,10); px(ctx,FLAME,16,y-2,1,10); }
-    text(ctx,label,20,y,1,on?FLAME:(e.kind==="enemy"?(e.seen?INK:INK3):(e.found?"#cfc6a8":INK3)));
+    text(ctx,label,20,y,1,on?FLAME:(e.kind==="enemy"?(e.seen?INK:INK3):!e.found?INK3:e.kind==="log"?LOG_C[LOGS[e.i][0]]:"#cfc6a8"));
     if(e.kind==="enemy"&&e.photo){ px(ctx,INK2,143,y+1,6,5); px(ctx,"#141008",145,y+2,2,2); }
     G.jHits.push({i,y0:y-2,y1:y+8});
   }
   const J=G.save.journal;
-  text(ctx,"PAGES "+J.seen.length+"/"+JIDS.length+"   PHOTOS "+J.photos.length+"/"+JIDS.length,84,H-20,1,INK3,"c");
+  text(ctx,"PAGES "+J.seen.length+"/"+JIDS.length+"   PHOTOS "+J.photos.length+"/"+JIDS.length,84,H-30,1,INK3,"c");
+  text(ctx,"DIARIES "+G.save.diaries.length+"/"+DIARIES.length+"  TAPES "+G.save.logs.length+"/"+LOGS.length,84,H-20,1,INK3,"c");
   const e=E[G.jSel], rx=170, cx=rx+66;
-  if(e.kind==="enemy"){
+  const linked=e.kind==="enemy"&&e.seen?linkedDiaries(e.b.id):[]; G.jSub=clamp(G.jSub||0,0,linked.length);
+  if(linked.length) text(ctx,"< "+(G.jSub?"BACK TO IT":"FOUND WITH IT: "+linked.length)+" >",cx,H-40,1,"#cfc6a8","c");
+  if(G.jSub>0){ // the diary of whoever this was: the player puts it together
+    const i=linked[G.jSub-1]; text(ctx,WORKERS[DIARIES[i][0]]+", PAGE "+diaryNo(i),cx,14,1,FLAME,"c");
+    wrapText(DIARIES[i][1],21).forEach((l,j)=>text(ctx,l,rx,30+j*10,1,"#cfc6a8"));
+  } else if(e.kind==="diary"){
+    text(ctx,e.found?WORKERS[DIARIES[e.i][0]]+", PAGE "+diaryNo(e.i):"DIARY ???",cx,14,1,FLAME,"c");
+    wrapText(e.found?DIARIES[e.i][1]:"NOT FOUND YET.",21).forEach((l,j)=>text(ctx,l,rx,30+j*10,1,e.found?"#cfc6a8":INK3));
+  } else if(e.kind==="log"){
+    const c=e.found?LOG_C[LOGS[e.i][0]]:INK3; text(ctx,e.found?"TAPE "+(e.i+1):"TAPE ???",cx,14,1,c,"c");
+    wrapText(e.found?LOGS[e.i][1]:"NOT PLAYED YET. FIND A TERMINAL.",21).forEach((l,j)=>text(ctx,l,rx,30+j*10,1,c));
+    if(e.found) text(ctx,"FROM: "+LOG_NAME[LOGS[e.i][0]],cx,H-40,1,c,"c");
+  } else if(e.kind==="enemy"){
     uiFrame(ctx,cx-34,12,68,68,"#3a3026","#2e2a24"); // dim floor colour, so dark creatures still show
     if(e.seen) bestiaryPic(e.b,cx-32,14,!e.photo); else text(ctx,"?",cx,36,3,INK3,"c");
     text(ctx,e.seen?e.b.name:"???",cx,86,1,e.seen?FLAME:INK3,"c");
@@ -3073,6 +3223,7 @@ function onKeyDown(e){
   if(G.struggle){ const d={KeyW:"up",KeyS:"down",KeyA:"left",KeyD:"right",ArrowUp:"up",ArrowDown:"down",ArrowLeft:"left",ArrowRight:"right"}[e.code]; if(d&&!e.repeat&&touchMode()) strugglePress(d); return; }
   if(mode!=="play"||G.dying||G.slide) return;
   if(G.dlg){dialogKey(e.code);return;}
+  if(G.video){ if(e.code==="Space"||e.code==="Enter") videoKey(); return; }
   if(G.sit||G.exitSeq) return;
   if(e.code==="Tab"){G.ui="inv"; G.invMsg=""; sfx.click(); return;}
   if(e.code==="KeyB"){G.ui="journal"; sfx.click(); return;}
@@ -3091,6 +3242,7 @@ window.addEventListener("blur",()=>{keys.clear(); if(mode==="play") togglePause(
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&mode==="play") togglePause();});
 // a tap or click on the picture: menu rows, dialogue choices, or "next"
 function tapAt(x,y){
+  if(mode==="play"&&G&&G.video&&!subMenu&&mode!=="pause"){videoKey(); return;}
   if(mode==="play"&&G&&G.struggle){const h=G.struggle.hits.find(h=>x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h); if(h) strugglePress(h.id); return;}
   if(mode==="play"&&G&&G.ui&&!subMenu){uiTap(x,y);return;}
   if(mode==="end"&&!subMenu){ if(titleT>0.8) begin(); return; }
@@ -3257,6 +3409,10 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
     const cj=cleanSave({journal:{seen:["moth","dragon","moth"],photos:["listener","moth",7]}}).journal;
     console.assert(cj.seen.join()==="moth"&&cj.photos.join()==="moth","journal cleaned: known creatures, photos only of met ones");
     console.assert(JIDS.length===BESTIARY.length&&BESTIARY.every(b=>JIDS.includes(b.id)),"every journal page has art");
+    console.assert(FOES.every(k=>DIARIES.filter(d=>d[0]===k).length===3)&&DIARIES.every((d,i)=>diaryNo(i)===3||d[1].endsWith("-"+WORKERS[d[0]])),"three diaries a worker, the readable ones signed");
+    console.assert(DIARIES.concat(LOGS).every(d=>[...d[1]].every(ch=>FONT[ch]))&&LOGS.every(l=>LOG_C[l[0]]),"every diary and tape can be drawn with the font, every tape has a colour");
+    const cd=cleanSave({diaries:[0,0,20,21,-1,"2",1.5],logs:[7,8,"x"]});
+    console.assert(cd.diaries.join()==="0,20"&&cd.logs.join()==="7","diaries and tapes cleaned");
     console.assert(FOES.every(k=>FOE[k].upd&&FOE[k].draw&&JIDS.includes(k)&&SHAKE[k]&&scareFace(k).width===48),"every new enemy has behaviour, art, a page, a shake and a scare face");
     console.assert(cleanBinds({use:["KeyW"]})===null&&cleanBinds({pause:[]})===null&&cleanBinds({run:["<script>"]})===null,"bad key bindings refused");
     console.assert(cleanBinds(null).use[0]==="Space"&&canon("ArrowUp")!==undefined,"default key bindings");
