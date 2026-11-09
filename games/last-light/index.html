@@ -16,14 +16,14 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:#050505;overflow:hidden}
   body{display:grid;place-items:center;-webkit-tap-highlight-color:transparent}
-  #wrap{position:relative}
-  canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;background:#000;cursor:default}
+  #wrap{position:relative;display:flex}
+  canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;background:#000;cursor:default}
   canvas:focus-visible{outline:2px solid #e8a94a;outline-offset:2px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
   /* ---- touch controls: only on touch screens ---- */
   #touch{display:none;position:fixed;inset:0;pointer-events:none;z-index:2;zoom:var(--tc-zoom,1);font:12px/1 "Silkscreen",ui-monospace,monospace;letter-spacing:.06em;color:#f3e6cf}
-  @media (pointer:coarse){#touch{display:block}}
+  body[data-input="touch"] #touch{display:block}
   #touch button,#stick{pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none}
   #touch button{position:absolute;display:grid;place-items:center;width:64px;height:64px;padding:0;border-radius:50%;
     font:inherit;color:inherit;background:rgba(232,169,74,.16);border:2px solid rgba(243,230,207,.35);opacity:var(--tc-alpha,.75);
@@ -56,7 +56,7 @@
   #turn i{width:44px;height:72px;border:3px solid #f3e6cf;border-radius:6px;animation:tilt 1.6s ease-in-out infinite}
   @keyframes tilt{0%,30%{transform:none}60%,100%{transform:rotate(-90deg)}}
   @media (prefers-reduced-motion:reduce){#turn i{animation:none;transform:rotate(-90deg)}}
-  @media (pointer:coarse) and (orientation:portrait){#turn{display:grid}}
+  @media (orientation:portrait){body[data-input="touch"] #turn{display:grid}}
 
   @font-face{font-family:"Silkscreen";src:url(../../fonts/silkscreen-400.woff2) format("woff2");font-display:swap}
   @font-face{font-family:"Silkscreen";src:url(../../fonts/silkscreen-700.woff2) format("woff2");font-weight:700;font-display:swap}
@@ -65,7 +65,9 @@
 </head>
 <body>
 <div id="wrap">
+  <canvas id="pl" aria-hidden="true"></canvas>
   <canvas id="c" width="320" height="192" tabindex="0" aria-label="Last Light. Press Enter to start."></canvas>
+  <canvas id="pr" aria-hidden="true"></canvas>
   <p class="sr" id="sr" aria-live="polite"></p>
 </div>
 <div id="touch" aria-hidden="true">

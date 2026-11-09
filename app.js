@@ -560,7 +560,7 @@ async function confirmDelete(slot) {
 }
 
 /* ---------- Settings: sound, vibration, touch controls (read by the games) ---------- */
-const DEFAULTS = { sound: true, music: true, vibration: true, touchSize: 'm', touchAlpha: 0.75, leftHanded: false };
+const DEFAULTS = { sound: true, music: true, vibration: true, touchSize: 'm', touchAlpha: 0.75, leftHanded: false, inputMode: 'auto' };
 function settings() { return { ...DEFAULTS, ...(store.json(KEY.settings) || {}) }; }
 function renderSettings() {
   const s = settings();
@@ -671,7 +671,7 @@ function wipeLocal(keepSettings) {
   const keys = new Set(saveKeys());
   games.forEach(g => g.legacyKey && keys.add(g.legacyKey));
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.') && !k.startsWith('shanoware.dev.')) keys.add(k); } } catch {}
-  if (keepSettings) [KEY.settings, KEY.bar, KEY.welcomed, KEY.ageBlocked, KEY.pendingDelete].forEach(k => keys.delete(k));
+  if (keepSettings) [...keys].filter(k => [KEY.settings, KEY.bar, KEY.welcomed, KEY.ageBlocked, KEY.pendingDelete].includes(k) || k.startsWith('shanoware.keys.')).forEach(k => keys.delete(k));
   keys.forEach(k => store.del(k));
 }
 $('wipe').addEventListener('click', async () => {

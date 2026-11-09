@@ -110,7 +110,15 @@
         </fieldset>
 
         <fieldset class="group">
-          <legend>Touch controls</legend>
+          <legend>Controls</legend>
+          <p class="sub-legend" id="mode-l">Play with</p>
+          <div class="seg" role="radiogroup" aria-labelledby="mode-l">
+            <label><input type="radio" name="inputMode" value="auto" data-setting="inputMode"><span>Auto</span></label>
+            <label><input type="radio" name="inputMode" value="pc" data-setting="inputMode"><span>Keyboard</span></label>
+            <label><input type="radio" name="inputMode" value="touch" data-setting="inputMode"><span>Touch</span></label>
+          </div>
+          <p class="hint">Auto uses touch controls on phones and tablets, and keyboard and mouse on computers. Keys can be changed in the game's own Settings.</p>
+          <p class="sub-legend">Touch controls</p>
           <div class="tc-preview" id="tc-preview" aria-hidden="true"><i class="tc-stick"></i><i class="tc-b1"></i><i class="tc-b2"></i><i class="tc-b3"></i></div>
           <p class="sub-legend" id="size-l">Size</p>
           <div class="seg" role="radiogroup" aria-labelledby="size-l">

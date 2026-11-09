@@ -9,10 +9,16 @@ const DOOR={n:{x:160,y:7}, s:{x:160,y:185}, w:{x:7,y:96}, e:{x:313,y:96}};
 const RADIUS=[0,30,54,82];          // light radius by lantern level
 const BURN=[0,0.35,0.6,1.0];        // fuel per second by level
 const SLUDGE_RATE=[5,0.8,-2,-3.5];  // percent per second by level (index 0 = no light)
-const SW_DEFAULTS={sound:true,music:true,vibration:true,touchSize:"m",touchAlpha:0.75,leftHanded:false};
+const SW_DEFAULTS={sound:true,music:true,vibration:true,touchSize:"m",touchAlpha:0.75,leftHanded:false,inputMode:"auto"};
 let SW=SW_DEFAULTS;
 function readSettings(){try{SW=Object.assign({},SW_DEFAULTS,JSON.parse(localStorage.getItem("shanoware.settings"))||{});}catch(e){SW=SW_DEFAULTS;}}
 readSettings();
+// Touch screen and no mouse = touch mode; anything else = keyboard and mouse. A setting can override it.
+function detectTouch(){ return (("ontouchstart" in window)||navigator.maxTouchPoints>0) && !matchMedia("(any-pointer: fine)").matches; }
+function inputMode(){ return SW.inputMode==="touch"||SW.inputMode==="pc"?SW.inputMode:(detectTouch()?"touch":"pc"); }
+const touchMode=()=>document.body.dataset.input==="touch";
+function applyInput(){ document.body.dataset.input=inputMode(); }
+applyInput();
 const buzz=ms=>{ if(SW.vibration&&navigator.vibrate) try{navigator.vibrate(ms);}catch(e){} };
 const SLOT=Math.max(1,Math.min(9,parseInt(new URLSearchParams(location.search).get("slot"),10)||1));
 const SAVE_KEY="lastlight.v1.slot"+SLOT;
@@ -20,7 +26,6 @@ const SAVE_KEY="lastlight.v1.slot"+SLOT;
 try{const old=localStorage.getItem("lastlight.v1"); if(old!==null&&localStorage.getItem("lastlight.v1.slot1")===null){localStorage.setItem("lastlight.v1.slot1",old); localStorage.removeItem("lastlight.v1");}}catch(e){}
 const OTHER_T=480, SHIFT_T=900;          // when the Other starts showing up, when the Black Shift starts
 const EXIT_TYPES=["hatch","lift","chimney","drain"];
-const HUD_BLOCKS=[[0,0,3,3],[16,0,19,4],[0,9,3,11]]; // tiles under the map, the face and the lantern
 
 const cv=document.getElementById("c");
 const ctx=cv.getContext("2d");
@@ -143,7 +148,6 @@ function buildRoom(r,isStart,isExit){
   if(r.kind==="lockers"){for(let x=2;x<=17;x++) if(x<8||x>11) t[1*RW+x]=6;}
   if(r.kind==="pump"){r.pumpX=rnd()<0.5?3:14; for(let y=2;y<=3;y++)for(let k=0;k<3;k++) t[y*RW+r.pumpX+k]=6;}
   if(r.kind==="chapel"){for(const y of [3,8]) for(const x of [3,4,5,6,13,14,15,16]) t[y*RW+x]=6;}
-  for(const [x0,y0,x1,y1] of HUD_BLOCKS) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) t[y*RW+x]=1;
   r.tiles=t;
   r.lamps=[];
   if(!isStart&&r.kind!=="lockers"){const n=rnd()<0.45?1:(rnd()<0.25?2:0); for(let k=0;k<n;k++){let tx=5+Math.floor(rnd()*10); if(tx>=8&&tx<=11) tx=rnd()<0.5?5:14; r.lamps.push({x:tx*T+8,y:19,dead:r.ev==="blackout"||rnd()<0.25,dieAt:rnd()<0.5?120+rnd()*800:1e9,ph:rnd()*9});}}
@@ -1183,7 +1187,7 @@ function intro(){
   const ash={moth:"COOL. COOL COOL COOL.",dark:"GREAT. LOVE THAT FOR ME.",time:"...I'M NOT GONNA THINK ABOUT THAT."}[sv.lastDeath]||"FORGOT MY DIGNITY DOWN HERE.";
   dialog([[line[0],line[1],null,null,7],["ASH",ash]],introDone);
 }
-function introDone(){G.introPanel=null; if(EVENTS[G.ev]) toast("ev",EVENTS[G.ev]); else toast("talk","SPACE TO TALK, READ AND USE THINGS.");}
+function introDone(){G.introPanel=null; if(EVENTS[G.ev]) toast("ev",EVENTS[G.ev]); else toast("talk",K("use")+" TO TALK, READ AND USE THINGS.");}
 
 /* ================= main update ================= */
 function update(dt){
@@ -1247,7 +1251,7 @@ function update(dt){
   if(G.pouring>0){G.pouring-=dt; if(G.pouring<=0){G.fuel=Math.min(100,G.fuel+45);G.flasks--;}}
   if(lightOn()){
     G.fuel=Math.max(0,G.fuel-BURN[G.level]*G.burnMul*G.lan.burn*dt);
-    if(G.fuel<=0){sfx.out();toast("out","The lantern went out. Press F to pour oil.");}
+    if(G.fuel<=0){sfx.out();toast("out","The lantern went out. Press "+K("pour")+" to pour oil.");}
     else if(G.fuel<25) toast("low","The lantern is running low.");
   }
 
@@ -1275,7 +1279,7 @@ function update(dt){
   G.room.oil=G.room.oil.filter(o=>{
     if(dist(o.x,o.y,p.x,p.y)<10){
       if(G.flasks>=3){toast("full","You can only carry 3 flasks.");return true;}
-      G.flasks++; sfx.pickup(); toast("flask","Oil flask. Press F to pour it into the lantern."); return false;
+      G.flasks++; sfx.pickup(); toast("flask","Oil flask. Press "+K("pour")+" to pour it into the lantern."); return false;
     }
     return true;
   });
@@ -1453,12 +1457,15 @@ function updOther(dt){
 function render(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
-  if(mode==="title"){renderTitle();return;}
-  if(!G) return;
-  renderGame();
-  ctx.setTransform(1,0,0,1,0,0);
-  if(mode==="pause") renderPause();
-  if(mode==="end") renderEnd();
+  if(mode==="title") renderTitle();
+  else if(G){
+    renderGame();
+    ctx.setTransform(1,0,0,1,0,0);
+    if(mode==="pause") renderPause();
+    if(mode==="end") renderEnd();
+  }
+  if(subMenu) renderKeys();
+  drawPanels();
 }
 function staticLights(){
   const r=G.room, out=[];
@@ -1736,7 +1743,7 @@ function renderGame(){
 
   ctx.setTransform(1,0,0,1,0,0);
   drawHud();
-  if(!G.dlg&&!G.dying&&!G.sit&&hintsOn()){const it=nearestThing(); if(it&&!it.low) text(ctx,"SPACE",Math.round(p.x),Math.round(p.y)-36,1,INK,"c","#000");}
+  if(!G.dlg&&!G.dying&&!G.sit&&hintsOn()){const it=nearestThing(); if(it&&!it.low) text(ctx,K("use"),Math.round(p.x),Math.round(p.y)-36,1,INK,"c","#000");}
   if(G.sit) text(ctx,"SIT STILL  "+Math.ceil(G.sit.t),W/2,24,1,INK,"c","#000");
   if(G.exitSeq) text(ctx,(G.exitSeq.type==="chimney"?"CLIMB  ":"HOLD YOUR BREATH  ")+Math.ceil(G.exitSeq.dur-G.exitSeq.t),W/2,24,1,INK,"c","#000");
   if(G.liftT>0) text(ctx,"THE CAGE  "+Math.ceil(G.liftT),W/2,24,1,FLAME,"c","#000");
@@ -1769,42 +1776,68 @@ function drawOther(g,o,t){
   if(o.dir!=="u"){px(g,"#e8e4dc",x+6,y+8); px(g,"#e8e4dc",x+10,y+8);}
   if(o.state!=="copy"&&o.dir!=="u"){px(g,"#1a0505",x+5,y+12,7,1); px(g,"#ece6d6",x+6,y+12); px(g,"#ece6d6",x+8,y+12); px(g,"#ece6d6",x+10,y+12);}
 }
-function drawHud(){
-  // minimap, 9 by 7 rooms around you
-  const mx0=6,my0=6,cw=6,ch=4;
-  px(ctx,"rgba(0,0,0,.55)",mx0-2,my0-2,9*cw+3,7*ch+3);
+/* ================= side panels: the HUD sits beside the room, never on it ================= */
+const pl=document.getElementById("pl"), pr=document.getElementById("pr"), plc=pl.getContext("2d"), prc=pr.getContext("2d");
+const PMIN=36, PMAX=92; let PW=PMIN;
+const faceC=mk(PN,PN), faceG=faceC.getContext("2d");
+function drawPanels(){
+  for(const [g,edge] of [[plc,PW-1],[prc,0]]){ g.imageSmoothingEnabled=false; g.fillStyle=G&&mode!=="title"?"#0b0a09":"#050505"; g.fillRect(0,0,PW,H); if(G&&mode!=="title") px(g,"#1c1a17",edge,0,1,H); }
+  if(!G||mode==="title") return;
+  const slim=PW<60, c=Math.round(PW/2);
+  // LEFT: map, lantern with fuel bar, quick slots
+  const cw=slim?3:clamp(Math.floor((PW-10)/9),4,9), ch=slim?2:Math.max(3,Math.round(cw*0.66));
+  const top=touchMode()?32:0; // room for the touch Pause button above the map
+  const mx0=Math.round(c-(9*cw)/2), my0=(slim?6:16)+top;
+  if(!slim) text(plc,"MAP",c,5+top,1,INK3,"c");
+  px(plc,"rgba(0,0,0,.55)",mx0-2,my0-2,9*cw+3,7*ch+3);
   for(const r of G.rooms){
     const dx=r.x-G.room.x+4, dy=r.y-G.room.y+3;
     if(dx<0||dy<0||dx>8||dy>6) continue;
     const known=r.visited||r.neighbors.some(n=>n.visited)||(r.hatch&&(G.helped==="lis"||r.exitSeen));
     if(!known) continue;
-    const x=mx0+dx*cw, y=my0+dy*ch;
-    if(r===G.room) px(ctx,"#e8d6a8",x,y,cw-1,ch-1);
-    else if(r.visited) px(ctx,"#6f685c",x,y,cw-1,ch-1);
-    else{px(ctx,"#2e2b26",x,y,cw-1,ch-1);}
-    if(r.hatch&&(r.exitSeen||G.helped==="lis")) px(ctx,"#8fb4c4",x+2,y+1,1,1);
-    if(r.special&&r.visited&&r!==G.room) px(ctx,r.special==="shop"?"#e8a94a":"#d9cfb8",x+2,y+1,1,1);
+    const x=mx0+dx*cw, y=my0+dy*ch, mw=Math.max(1,cw-1), mh=Math.max(1,ch-1), mc=Math.floor(cw/2), mr=Math.floor(ch/2);
+    if(r===G.room) px(plc,"#e8d6a8",x,y,mw,mh);
+    else if(r.visited) px(plc,"#6f685c",x,y,mw,mh);
+    else px(plc,"#2e2b26",x,y,mw,mh);
+    if(r.hatch&&(r.exitSeen||G.helped==="lis")) px(plc,"#8fb4c4",x+mc-(slim?1:0),y+mr-(slim?1:0),1,1);
+    if(r.special&&r.visited&&r!==G.room) px(plc,r.special==="shop"?"#e8a94a":"#d9cfb8",x+mc-(slim?1:0),y+mr-(slim?1:0),1,1);
   }
   if(G.helped==="lis") for(const ex of G.map.exits){ // the Listener's marks, pinned to the map edge when out of view
     const dx=ex.x-G.room.x+4, dy=ex.y-G.room.y+3;
-    if(dx<0||dy<0||dx>8||dy>6){const cx=clamp(dx,0,8), cy=clamp(dy,0,6); if(Math.sin(G.elapsed*5)>0) px(ctx,"#8fb4c4",mx0+cx*cw+1,my0+cy*ch,3,3);}
+    if(dx<0||dy<0||dx>8||dy>6){const cx=clamp(dx,0,8), cy=clamp(dy,0,6); if(Math.sin(G.elapsed*5)>0) px(plc,"#8fb4c4",mx0+cx*cw,my0+cy*ch,Math.max(1,cw-2),Math.max(1,ch-1));}
   }
-  // timer: quiet until the last two minutes
-  const left=TIME_LIMIT-G.elapsed, s=fmt(left), red=left<120;
-  text(ctx,s,W/2,7,1,red?(Math.sin(G.elapsed*6)>0?BLOOD:"#7a2a22"):INK2,"c","#000");
-  // portrait, the thing you watch
-  drawPortrait(ctx,W-52,4,G.sludge,G.elapsed,G.growing&&!G.dying?true:false,fxRnd);
-  if(G.wrongFace>0){ // for a moment, the face in the corner isn't yours
-    const x=W-52, y=4; ctx.fillStyle="#000"; ctx.beginPath(); ctx.ellipse(x+30,y+23,5,4,0,0,7); ctx.ellipse(x+17,y+22,4,3,0,0,7); ctx.fill();
-    px(ctx,"#e8e4dc",x+30,y+23); px(ctx,"#1a0505",x+14,y+34,20,3); for(let k=0;k<6;k++) px(ctx,"#ece6d6",x+15+k*3,y+34,2,2);
+  const lw=slim?10:20, lh=slim?16:32, ly=my0+7*ch+(slim?8:14), lx=c-Math.round(lw/2)-(slim?2:4);
+  plc.drawImage(lanternIcon(lightOn()?G.level:0,G.fuel,G.elapsed),lx,ly,lw,lh);
+  const bx=lx+lw+(slim?2:4), bw=slim?2:3, fh=Math.round(lh*clamp(G.fuel,0,100)/100); // fuel bar
+  px(plc,"#1c1a17",bx,ly,bw,lh); px(plc,G.fuel<25?BLOOD:FLAME,bx,ly+lh-fh,bw,fh);
+  if(G.pouring>0) px(plc,"#d18b2a",lx,ly+lh+2,Math.round((1-G.pouring/0.9)*(lw+bw+4)),1);
+  if(!slim) text(plc,"LAMP",c,ly+lh+6,1,INK3,"c");
+  // quick slots: oil flasks, crank, fuses
+  const sz=slim?10:14, gap=2, sx0=c-Math.round((3*sz+2*gap)/2), sy=ly+lh+(slim?6:16);
+  for(let i=0;i<3;i++){const x=sx0+i*(sz+gap); px(plc,"#1c1a17",x,sy,sz,sz); px(plc,"#0b0a09",x+1,sy+1,sz-2,sz-2);}
+  const cx=k=>sx0+k*(sz+gap)+Math.floor(sz/2);
+  if(G.flasks>0){const fx=cx(0)-2, fy=sy+(slim?1:2); px(plc,"#8a6a44",fx+1,fy,2,1); px(plc,"#6b4a22",fx,fy+1,4,slim?7:9); px(plc,"#d18b2a",fx+1,fy+2,2,slim?5:7);
+    if(slim) for(let i=0;i<G.flasks;i++) px(plc,INK2,sx0+1+i*3,sy+sz+2,2,1); else text(plc,String(G.flasks),sx0+sz+1,sy+sz-6,1,INK,"r");}
+  if(G.crank){const kx=cx(1)-3, ky=sy+Math.floor(sz/2)-1; px(plc,"#5a4f45",kx,ky+2,7,2); px(plc,"#5a4f45",kx+5,ky-2,2,4);}
+  if(G.fuses>0||G.map.exits.some(e=>e.exitT==="lift"&&e.visited)){const fx=cx(2)-2, fy=sy+(slim?1:2); px(plc,"#2a2622",fx,fy,4,slim?7:9); px(plc,G.fuses?"#c9a04a":"#3a3530",fx,fy,4,1);
+    if(slim) for(let i=0;i<G.fuses;i++) px(plc,"#c9a04a",sx0+2*(sz+gap)+1+i*3,sy+sz+2,2,1); else text(plc,G.fuses+"/3",sx0+3*sz+2*gap,sy+sz+2,1,INK2,"r");}
+  // RIGHT: Ash, the timer, scrip
+  const ps=slim?32:Math.min(48,PW-12), pyy=slim?6:16;
+  if(!slim) text(prc,"ASH",c,5,1,INK3,"c");
+  faceG.clearRect(0,0,PN,PN);
+  drawPortrait(faceG,0,0,G.sludge,G.elapsed,G.growing&&!G.dying?true:false,fxRnd);
+  if(G.wrongFace>0){ // for a moment, the face beside the room isn't yours
+    faceG.fillStyle="#000"; faceG.beginPath(); faceG.ellipse(30,23,5,4,0,0,7); faceG.ellipse(17,22,4,3,0,0,7); faceG.fill();
+    px(faceG,"#e8e4dc",30,23); px(faceG,"#1a0505",14,34,20,3); for(let k=0;k<6;k++) px(faceG,"#ece6d6",15+k*3,34,2,2);
   }
-  // the lantern itself, bottom left
-  ctx.drawImage(lanternIcon(lightOn()?G.level:0,G.fuel,G.elapsed),6,H-38,20,32);
-  for(let i=0;i<G.flasks;i++){const fx=30+i*8, fy=H-18; px(ctx,"#8a6a44",fx+1,fy-2,2,2); px(ctx,"#6b4a22",fx,fy,4,9); px(ctx,"#d18b2a",fx+1,fy+2,2,6); px(ctx,"#f0c070",fx+1,fy+2);}
-  if(G.pouring>0) px(ctx,"#d18b2a",6,H-4,Math.round((1-G.pouring/0.9)*20),1);
-  if(G.crank){px(ctx,"#5a4f45",52,H-30,7,2); px(ctx,"#5a4f45",57,H-34,2,4);}
-  if(G.fuses>0||G.map.exits.some(e=>e.exitT==="lift"&&e.visited)) for(let i=0;i<3;i++){const fx=30+i*6, fy=H-44, on=i<G.fuses; px(ctx,"#2a2622",fx,fy,4,7); px(ctx,on?"#c9a04a":"#3a3530",fx,fy,4,1); px(ctx,on?"#c9a04a":"#3a3530",fx,fy+6,4,1); px(ctx,on?"#e8e4dc":"#141210",fx+1,fy+2,2,3);}
-  if(G.scrip>0||G.metWick){px(ctx,"#8a6a2a",30,H-32,5,5); px(ctx,"#c9a04a",30,H-32,4,4); px(ctx,"#f0d080",31,H-31); text(ctx,String(G.scrip),38,H-32,1,INK2);}
+  prc.drawImage(faceC,c-Math.round(ps/2),pyy,ps,ps);
+  const left=TIME_LIMIT-G.elapsed, red=left<120, ty=pyy+ps+(slim?6:12);
+  if(!slim) text(prc,"SHIFT",c,ty,1,INK3,"c");
+  text(prc,fmt(left),c,ty+(slim?0:10),1,red?(Math.sin(G.elapsed*6)>0?BLOOD:"#7a2a22"):INK2,"c");
+  if(G.scrip>0||G.metWick){const yy=ty+(slim?12:26), xx=c-(slim?8:12); px(prc,"#8a6a2a",xx,yy,5,5); px(prc,"#c9a04a",xx,yy,4,4); px(prc,"#f0d080",xx+1,yy+1); text(prc,String(G.scrip),xx+8,yy-1,1,INK2);}
+}
+// Messages still appear over the room: they are short and fade.
+function drawHud(){
   // messages
   if(G.toast){
     const a=G.toast.t<0.2?G.toast.t/0.2:G.toast.t>3?(3.4-G.toast.t)/0.4:1;
@@ -1845,8 +1878,16 @@ function setHints(on){const s=loadSave(); s.settings=Object.assign({},s.settings
 let settingsOpen=false;
 const setMenu={sel:0,confirm:null,items:()=>[
   {label:"HINTS: "+(hintsOn()?"ON":"OFF"),fn:()=>setHints(!hintsOn()),left:()=>setHints(!hintsOn()),right:()=>setHints(!hintsOn())},
+  {label:"CONTROLS: "+{auto:"AUTO",pc:"KEYBOARD",touch:"TOUCH"}[SW.inputMode in {auto:1,pc:1,touch:1}?SW.inputMode:"auto"],fn:()=>cycleInput(1),left:()=>cycleInput(-1),right:()=>cycleInput(1)},
+  {label:"KEYS",fn:()=>{subMenu=keysMenu; keysMenu.sel=0; keysMenu.confirm=null; keysNotice="";}},
   {label:"BACK",fn:()=>{settingsOpen=false;}}
 ]};
+// Shared with Shanoware's own Settings page.
+function cycleInput(d){
+  const order=["auto","pc","touch"], i=(order.indexOf(SW.inputMode)+d+3)%3;
+  try{ const all=JSON.parse(localStorage.getItem("shanoware.settings"))||{}; all.inputMode=order[i]; localStorage.setItem("shanoware.settings",JSON.stringify(all)); }catch(e){}
+  readSettings(); applyInput(); applyTouch(); keys.clear();
+}
 const openSettings=()=>{settingsOpen=true; setMenu.sel=0;};
 const titleMenu={sel:0,confirm:null,items:()=>[
   {label:"LIGHT THE LANTERN",fn:begin},
@@ -1911,7 +1952,7 @@ function renderTitle(){
   if(sv.runs) text(ctx,"ENDINGS "+found+"/"+ENDING_IDS.length+"   NOTES "+notes+"/"+NOTES.length+"   LANTERNS "+owned().length+"/"+LANTERNS.length,W/2,57,1,INK3,"c");
   drawMenu(settingsOpen?setMenu:titleMenu,114);
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,184,1,FLAME,"c","#000");
-  else if(settingsOpen) text(ctx,setMenu.sel===0?"TIPS LIKE: THE LANTERN IS RUNNING LOW.":"ESC: BACK",W/2,184,1,INK3,"c");
+  else if(settingsOpen) text(ctx,["TIPS LIKE: THE LANTERN IS RUNNING LOW.","AUTO PICKS KEYBOARD OR TOUCH FOR THIS DEVICE.","CHANGE WHICH KEY DOES WHAT.","ESC: BACK"][setMenu.sel]||"",W/2,184,1,INK3,"c");
   else if(titleMenu.sel===1) text(ctx,lan.perk,W/2,184,1,INK3,"c");
   else{const nxt=LANTERNS.find(l=>!owned().includes(l)); if(nxt&&sv.runs) text(ctx,"NEXT LANTERN: "+nxt.how,W/2,184,1,INK3,"c");}
 }
@@ -1919,8 +1960,9 @@ function renderPause(){
   px(ctx,"rgba(0,0,0,.8)",0,0,W,H);
   text(ctx,settingsOpen?"SETTINGS":"PAUSED",W/2,26,3,INK,"c");
   drawMenu(settingsOpen?setMenu:pauseMenu,64);
-  text(ctx,"WASD MOVE   SHIFT RUN   Q/E LANTERN",W/2,128,1,INK3,"c");
-  text(ctx,"F POUR OIL   SPACE TALK / READ / USE",W/2,138,1,INK3,"c");
+  const help=touchMode()?["JOYSTICK MOVE   HOLD RUN TO RUN","SMALL BUTTONS: LANTERN   POUR   USE"]:
+    [moveKeys()+" MOVE   "+K("run")+" RUN   "+K("dim")+"/"+K("bright")+" LANTERN",K("pour")+" POUR OIL   "+K("use")+" TALK / READ / USE"];
+  if(!settingsOpen){ text(ctx,help[0],W/2,128,1,INK3,"c"); text(ctx,help[1],W/2,138,1,INK3,"c"); }
   text(ctx,"LANTERN: "+G.lan.name+(EVENTS[G.ev]?"   "+EVENTS[G.ev].replace("TONIGHT: ","").split(".")[0]:""),W/2,156,1,INK3,"c");
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,176,1,FLAME,"c","#000");
 }
@@ -1949,6 +1991,71 @@ function renderEnd(){
   if(titleT>0.8&&Math.floor(titleT*1.6)%2===0) text(ctx,(e.cause==="won"?"ENTER: GO BACK DOWN":"ENTER: TRY AGAIN")+"   ESC: MAIN MENU",W/2,179,1,INK,"c");
 }
 
+/* ================= keys: every action can be rebound ================= */
+// [id, label, canonical code the game reacts to, default keys]
+const ACTIONS=[
+  ["up","MOVE UP","KeyW",["KeyW","ArrowUp"]], ["down","MOVE DOWN","KeyS",["KeyS","ArrowDown"]],
+  ["left","MOVE LEFT","KeyA",["KeyA","ArrowLeft"]], ["right","MOVE RIGHT","KeyD",["KeyD","ArrowRight"]],
+  ["run","RUN","ShiftLeft",["ShiftLeft","ShiftRight"]], ["dim","LANTERN DIMMER","KeyQ",["KeyQ"]], ["bright","LANTERN BRIGHTER","KeyE",["KeyE"]],
+  ["pour","POUR OIL","KeyF",["KeyF"]], ["use","USE / TALK / HIDE","Space",["Space","Enter"]], ["inventory","INVENTORY","Tab",["Tab"]],
+  ["journal","JOURNAL","KeyB",["KeyB"]], ["reload","RELOAD FILM","KeyR",["KeyR"]], ["pause","PAUSE","Escape",["Escape","KeyP"]]
+];
+const KEYS_STORE="shanoware.keys.last-light";
+const DEFAULT_BINDS=Object.fromEntries(ACTIONS.map(a=>[a[0],a[3].slice()]));
+// Checked like a save: known actions only, 1 or 2 plain key codes each, and no key used by two actions.
+function cleanBinds(o){
+  const out={}, seen=new Set();
+  for(const [id,,,def] of ACTIONS){
+    const v=o&&typeof o==="object"&&Array.isArray(o[id])?o[id]:def;
+    if(!(v.length>=1&&v.length<=2&&v.every(c=>typeof c==="string"&&/^[A-Za-z0-9]{1,24}$/.test(c)))) return null;
+    for(const c of v){ if(seen.has(c)) return null; seen.add(c); }
+    out[id]=v.slice();
+  }
+  return out;
+}
+let BINDS=(()=>{ try{ return cleanBinds(JSON.parse(localStorage.getItem(KEYS_STORE)))||cleanBinds(DEFAULT_BINDS); }catch(e){ return cleanBinds(DEFAULT_BINDS); } })();
+function saveBinds(){ try{ localStorage.setItem(KEYS_STORE,JSON.stringify(BINDS)); }catch(e){} }
+function canon(code){ for(const [id,,c] of ACTIONS) if(BINDS[id].includes(code)) return c; return null; }
+const MENU_KEYS=new Set(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter","Escape"]); // always work in menus
+const KEY_NAMES={Space:"SPACE",Escape:"ESC",Enter:"ENTER",Tab:"TAB",Backspace:"BACKSPACE",CapsLock:"CAPS",ShiftLeft:"L SHIFT",ShiftRight:"R SHIFT",
+  ControlLeft:"L CTRL",ControlRight:"R CTRL",AltLeft:"L ALT",AltRight:"R ALT",ArrowUp:"UP",ArrowDown:"DOWN",ArrowLeft:"LEFT",ArrowRight:"RIGHT"};
+function keyName(c){ let m; if(KEY_NAMES[c]) return KEY_NAMES[c]; if((m=/^Key([A-Z])$/.exec(c))) return m[1]; if((m=/^Digit(\d)$/.exec(c))) return m[1];
+  if((m=/^Numpad(\d)$/.exec(c))) return "NUM "+m[1]; return c.toUpperCase().replace(/[^A-Z0-9 ]/g,"").slice(0,10); }
+const TOUCH_NAMES={up:"JOYSTICK",down:"JOYSTICK",left:"JOYSTICK",right:"JOYSTICK",run:"RUN",dim:"LANTERN DOWN",bright:"LANTERN UP",pour:"POUR",use:"USE",inventory:"INVENTORY",journal:"JOURNAL",reload:"RELOAD",pause:"PAUSE"};
+function K(id){ return touchMode()?TOUCH_NAMES[id]:keyName(BINDS[id][0]); }
+function moveKeys(){ const k=["up","left","down","right"].map(K); return k.every(x=>x.length===1)?k.join(""):k.join("/"); }
+let subMenu=null, keysNotice="", capture=null;
+const keysMenu={sel:0,confirm:null,items:()=>[
+  ...ACTIONS.map(([id,label])=>({label:label.padEnd(18)+BINDS[id].map(keyName).join("/").padStart(15),fn:()=>{capture=id; keysNotice="PRESS A KEY FOR "+label+".   ESC CANCELS.";}})),
+  {label:"RESET TO DEFAULTS",confirm:"PUT EVERY KEY BACK?",fn:()=>{BINDS=cleanBinds(DEFAULT_BINDS); saveBinds(); keysNotice="EVERY KEY IS BACK TO DEFAULT.";}},
+  {label:"BACK",fn:()=>{subMenu=null; keysNotice="";}}
+]};
+function bindKey(code){
+  const id=capture, label=ACTIONS.find(a=>a[0]===id)[1]; capture=null;
+  if(!code||code==="Escape"){ keysNotice="NOTHING CHANGED."; return; }
+  if(!/^[A-Za-z0-9]{1,24}$/.test(code)){ keysNotice="THAT KEY CAN'T BE USED."; return; }
+  const owner=ACTIONS.find(a=>a[0]!==id&&BINDS[a[0]].includes(code));
+  if(owner){ keysNotice=keyName(code)+" IS ALREADY USED BY "+owner[1]+"."; sfx.click(); return; }
+  BINDS[id]=[code]; saveBinds(); keysNotice=label+": "+keyName(code); sfx.click();
+}
+function renderKeys(){
+  ctx.setTransform(1,0,0,1,0,0);
+  px(ctx,"#050505",0,0,W,H);
+  text(ctx,"KEYS",W/2,4,2,INK,"c");
+  drawMenu(subMenu,24);
+  text(ctx,capture||keysNotice?keysNotice:"ENTER: CHANGE   ESC: BACK",W/2,183,1,capture?FLAME:keysNotice?INK:INK3,"c");
+}
+// Real keys are turned into the game's own action codes here, so the rest of the game never sees a rebinding.
+function onRawKey(e){
+  if(capture){ e.preventDefault(); if(!e.repeat) bindKey(e.code); return; }
+  const c=canon(e.code), menu=mode!=="play"||!!subMenu||!!(G&&G.dlg);
+  const code=menu&&MENU_KEYS.has(e.code)?e.code:c;
+  if(!code) return;
+  e.preventDefault();
+  onKeyDown({code,repeat:e.repeat,preventDefault(){}});
+}
+function onRawUp(e){ const c=canon(e.code); if(c) keys.delete(c); keys.delete(e.code); }
+
 /* ================= input ================= */
 function begin(){
   audioStart(); stopLoops(); newGame(); startLoops(); mode="play"; pauseMenu.sel=0; pauseMenu.confirm=null; intro();
@@ -1967,6 +2074,7 @@ function onKeyDown(e){
   if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
   if(e.repeat){keys.add(e.code);return;}
   keys.add(e.code);
+  if(subMenu){ if(e.code==="Escape"&&!subMenu.confirm){ subMenu=null; keysNotice=""; } else menuKey(subMenu,e.code); return; }
   if(mode==="title"){audioStart(); if(settingsOpen&&e.code==="Escape") settingsOpen=false; else menuKey(settingsOpen?setMenu:titleMenu,e.code); return;}
   if(mode==="end"){ if(titleT>0.8&&(e.code==="Enter"||e.code==="Space")) begin(); else if(titleT>0.8&&e.code==="Escape") toTitle(); return; }
   if(mode==="pause"&&settingsOpen){ if(e.code==="Escape") settingsOpen=false; else menuKey(setMenu,e.code); return; }
@@ -1983,14 +2091,15 @@ function onKeyDown(e){
   }
   if(e.code==="KeyF"&&G.flasks>0&&G.pouring<=0&&G.fuel<100){G.pouring=0.9;sfx.pour();noise(G.p.x,G.p.y,0.3);}
 }
-window.addEventListener("keydown",onKeyDown);
-window.addEventListener("keyup",e=>keys.delete(e.code));
+window.addEventListener("keydown",onRawKey);
+window.addEventListener("keyup",onRawUp);
 window.addEventListener("blur",()=>{keys.clear(); if(mode==="play") togglePause();});
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&mode==="play") togglePause();});
 // a tap or click on the picture: menu rows, dialogue choices, or "next"
 function tapAt(x,y){
-  if(mode==="end"){ if(titleT>0.8) begin(); return; }
-  const m=settingsOpen?setMenu:mode==="title"?titleMenu:mode==="pause"?pauseMenu:null;
+  if(mode==="end"&&!subMenu){ if(titleT>0.8) begin(); return; }
+  if(capture) return;
+  const m=subMenu||(settingsOpen?setMenu:mode==="title"?titleMenu:mode==="pause"?pauseMenu:null);
   if(m){
     if(m.confirm){ if(y>=90&&y<=112){m.confirm.sel=x<W/2?0:1; menuKey(m,"Enter");} return; }
     const h=(m.hits||[]).find(h=>y>=h.y0&&y<h.y1); if(!h) return;
@@ -2012,9 +2121,12 @@ addEventListener("contextmenu",e=>e.preventDefault());
 
 /* ================= sizing and loop ================= */
 const wrap=document.getElementById("wrap");
+// The room keeps its 320 x 192 grid; side panels fill the extra width, never less than slim strips.
 function fit(){
-  const s=Math.min(innerWidth/W,innerHeight/H), k=s>=2?Math.floor(s):s;
-  wrap.style.width=Math.floor(W*k)+"px"; wrap.style.height=Math.floor(H*k)+"px";
+  const iw=innerWidth, ih=innerHeight, s=Math.min(ih/H, iw/(W+2*PMIN)), k=s>=2?Math.floor(s):s;
+  PW=clamp(Math.floor((iw/k-W)/2),PMIN,PMAX);
+  for(const c of [pl,pr]){ c.width=PW; c.height=H; c.style.width=Math.floor(PW*k)+"px"; c.style.height=Math.floor(H*k)+"px"; }
+  cv.style.width=Math.floor(W*k)+"px"; cv.style.height=Math.floor(H*k)+"px";
 }
 addEventListener("resize",fit); fit();
 
@@ -2054,9 +2166,8 @@ stick.addEventListener("pointermove",e=>{if(e.pointerId===stickId) stickMove(e);
 window.addEventListener("blur",stickEnd);
 
 // Ask for landscape. Chrome only locks orientation in fullscreen, which needs a tap first.
-const isTouch=matchMedia("(pointer:coarse)").matches;
 function landscape(){
-  if(!isTouch||!screen.orientation||!screen.orientation.lock) return;
+  if(!touchMode()||!screen.orientation||!screen.orientation.lock) return;
   const lock=()=>screen.orientation.lock("landscape").catch(()=>{});
   if(!document.fullscreenElement&&document.documentElement.requestFullscreen) document.documentElement.requestFullscreen({navigationUI:"hide"}).then(lock,lock);
   else lock();
@@ -2064,8 +2175,8 @@ function landscape(){
 landscape(); // works straight away in the installed app; otherwise the first tap does it
 addEventListener("pointerup",landscape,{once:true});
 // Turning the phone upright mid-run pauses the game under the "Turn your phone" screen.
-const portrait=matchMedia("(pointer:coarse) and (orientation:portrait)");
-portrait.addEventListener("change",()=>{ if(portrait.matches&&mode==="play"&&!G.dying){ stickEnd(); keys.clear(); togglePause(); } });
+const portrait=matchMedia("(orientation:portrait)");
+portrait.addEventListener("change",()=>{ if(portrait.matches&&touchMode()&&mode==="play"&&!G.dying){ stickEnd(); keys.clear(); togglePause(); } });
 let shownMode=null, playSecs=0, playFlushAt=0;
 function flushPlaytime(){
   const add=Math.floor(playSecs); if(add<1) return;
@@ -2074,7 +2185,7 @@ function flushPlaytime(){
 }
 addEventListener("pagehide",flushPlaytime);
 document.addEventListener("visibilitychange",()=>{ if(document.hidden) flushPlaytime(); });
-addEventListener("pageshow",e=>{ if(e.persisted){ readSettings(); applyAudio(); applyTouch(); } });
+addEventListener("pageshow",e=>{ if(e.persisted){ readSettings(); applyInput(); applyAudio(); applyTouch(); } });
 function loop(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   update(dt); render();
@@ -2104,7 +2215,8 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
       for(const r of m.rooms){
         for(const [d,o] of Object.entries(r.nb)) console.assert(o.nb[{n:"s",s:"n",e:"w",w:"e"}[d]]===r,"doors are two-way");
         console.assert(!isSolid(r.tiles[5*RW+9])&&!isSolid(r.tiles[6*RW+10]),"centre stays open");
-        console.assert(isSolid(r.tiles[3*RW+3])&&isSolid(r.tiles[4*RW+16])&&isSolid(r.tiles[9*RW+3]),"HUD corners are wall");
+        // the wall blocks that used to sit under the map, the face and the lantern are gone
+        for(const [x0,y0,x1,y1] of [[1,1,3,3],[16,1,18,4],[1,9,3,10]]){ let wall=true; for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(r.tiles[y*RW+x]!==1) wall=false; console.assert(!wall,"old HUD corner is open"); }
         for(const o of r.oil.concat(r.scrip,r.note?[r.note]:[],r.item?[r.item]:[])) console.assert(!isSolid(tileAt(r,o.x,o.y)),"item on open floor");
         if(r.hatch) console.assert(!isSolid(tileAt(r,r.hatch.x,r.hatch.y)),"hatch on floor");
       }
@@ -2114,6 +2226,8 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
     console.assert(cleanSave(good.data).notes.length===2&&!cleanSave(good.data).endings.fake,"save cleaned");
     console.assert(!applyPayload({game:"other",v:1,data:{}})&&!applyPayload(null)&&!applyPayload({game:"last-light",v:1,data:[1]}),"bad saves refused");
     console.assert(ENDING_IDS.length===18,"18 endings");
+    console.assert(cleanBinds({use:["KeyW"]})===null&&cleanBinds({pause:[]})===null&&cleanBinds({run:["<script>"]})===null,"bad key bindings refused");
+    console.assert(cleanBinds(null).use[0]==="Space"&&canon("ArrowUp")!==undefined,"default key bindings");
     return "ok";
   }
 };
