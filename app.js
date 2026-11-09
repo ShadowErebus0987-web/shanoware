@@ -554,6 +554,7 @@ async function confirmDelete(slot) {
   if (!await ask(`Delete Save ${slot.n}?`, (p ? p + '. ' : '') + 'This cannot be undone.', 'Delete', 'Keep it', true)) return;
   store.del(slot.key);
   store.del(slot.key + '.meta');
+  store.del(slot.key + '.night'); // a night saved at a save point, kept on this device only
   renderSlots();
   toast(`Save ${slot.n} deleted`);
   syncAll();
@@ -658,6 +659,7 @@ $('import-file').addEventListener('change', async () => {
 
 $('download-data').addEventListener('click', async () => {
   const keys = new Set(saveKeys());
+  saveKeys().forEach(k => !k.endsWith('.meta') && keys.add(k + '.night'));
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.')) keys.add(k); } } catch {}
   const out = pack([...keys]);
   if (cloud && user) {
@@ -669,6 +671,7 @@ $('download-data').addEventListener('click', async () => {
 
 function wipeLocal(keepSettings) {
   const keys = new Set(saveKeys());
+  saveKeys().forEach(k => !k.endsWith('.meta') && keys.add(k + '.night'));
   games.forEach(g => g.legacyKey && keys.add(g.legacyKey));
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('shanoware.') && !k.startsWith('shanoware.dev.')) keys.add(k); } } catch {}
   if (keepSettings) [...keys].filter(k => [KEY.settings, KEY.bar, KEY.welcomed, KEY.ageBlocked, KEY.pendingDelete].includes(k) || k.startsWith('shanoware.keys.')).forEach(k => keys.delete(k));
@@ -937,7 +940,7 @@ async function doSync() {
         if (b !== undefined && r.updated === b) { await cloud.removeSave(g.id, s.n); delete base[s.key]; }  // deleted here
         else pull();                                                                                   // new from another device
       } else if (!r) {
-        if (b !== undefined && localUpdated <= b) { store.del(s.key); store.del(s.key + '.meta'); delete base[s.key]; changed = true; } // deleted on another device
+        if (b !== undefined && localUpdated <= b) { store.del(s.key); store.del(s.key + '.meta'); store.del(s.key + '.night'); delete base[s.key]; changed = true; } // deleted on another device
         else await push();
       } else if (JSON.stringify(JSON.parse(localData)) === JSON.stringify(r.data)) base[s.key] = r.updated;
       else if (b === r.updated) await push();                          // only this device changed

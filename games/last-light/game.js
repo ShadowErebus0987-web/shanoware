@@ -121,6 +121,8 @@ function genMap(seed,ev){
     for(const zid of PIPE_ZONES) shuffled(list.filter(r=>r.zone===zid&&!used.has(r)&&r.kind!=="valve"),rnd).slice(0,2+Math.floor(rnd()*2)).forEach(r=>{
       r.broken=true; r.brokenX=[2,3,4,5,6,13,14,15,16][Math.floor(rnd()*9)]*T+4;
     });
+    // three save points a night: near the start, midway, far out; on a clear stretch of wall
+    for(const [lo,hi] of [[2,4],[5,8],[9,99]]){const c=shuffled(list.filter(r=>!used.has(r)&&!r.broken&&!r.savept&&r.dist>=lo&&r.dist<=hi&&!["lockers","valve","drill","storage"].includes(r.kind)),rnd)[0]; if(c) c.savept=true;}
     list.forEach(r=>buildRoom(r,r===list[0],!!r.exitT));
     const spare=()=>shuffled(list.filter(r=>!used.has(r)&&r.dist>=3&&!r.item),rnd)[0]||list.find(r=>!used.has(r)&&!r.item);
     const place=(r,kind)=>{const [x,y]=freeSpot(r,rnd); r.item={kind,x:x*T+8,y:y*T+9};};
@@ -137,6 +139,7 @@ function genMap(seed,ev){
     if(!crateIn(list.filter(r=>r.kind==="storage"),"camera")) place(near(2,6),"camera");
     for(let k=0;k<3;k++) crateIn(list,"film")||place(spare(),"film");
     for(let k=0;k<2;k++) crateIn(list,"flare")||place(spare(),"flare");
+    crateIn(list,"hardhat")||place(spare(),"hardhat"); crateIn(list,"vest")||place(spare(),"vest");
     // what the exits need: a crank for the hatch, three fuses for the lift; and a wrench, all on the floor
     if(exits.some(e=>e.exitT==="hatch")) place(spare(),"crank");
     if(exits.some(e=>e.exitT==="lift")) for(let k=0;k<3;k++) place(spare(),"fuse");
@@ -226,7 +229,7 @@ function buildRoom(r,isStart,isExit){
     for(let k=0;k<n;k++) addCrate(r,rnd);
   }
   r.lamps=[];
-  if(!isStart&&!["lockers","valve","drill"].includes(r.kind)){const n=rnd()<0.45?1:(rnd()<0.25?2:0); for(let k=0;k<n;k++){let tx=5+Math.floor(rnd()*10); if(tx>=8&&tx<=11) tx=rnd()<0.5?5:14; r.lamps.push({x:tx*T+8,y:19,dead:r.ev==="blackout"||rnd()<0.25,dieAt:rnd()<0.5?120+rnd()*800:1e9,ph:rnd()*9});}}
+  if(!isStart&&!r.savept&&!["lockers","valve","drill"].includes(r.kind)){const n=rnd()<0.45?1:(rnd()<0.25?2:0); for(let k=0;k<n;k++){let tx=5+Math.floor(rnd()*10); if(tx>=8&&tx<=11) tx=rnd()<0.5?5:14; r.lamps.push({x:tx*T+8,y:19,dead:r.ev==="blackout"||rnd()<0.25,dieAt:rnd()<0.5?120+rnd()*800:1e9,ph:rnd()*9});}}
   r.scrawl=!isStart&&rnd()<0.22?SCRAWLS[Math.floor(rnd()*SCRAWLS.length)]:null;
   r.blood=!isStart&&rnd()<0.3;
   const freeTile=()=>{for(let k=0;k<200;k++){const [x,y]=inner(); if(t[y*RW+x]===0&&r.reach[y*RW+x]) return [x,y];} return [9,5];};
@@ -840,6 +843,10 @@ const LOGS=[
   ["boss","MEMO. SEAL LEVELS B TO D. ANY CREW STILL BELOW ARE TO BE LISTED AS HAVING QUIT."],
   ["sludge","LET THE LIGHT GO OUT, LITTLE ONE. IT IS WARM IN THE DARK. EVERYONE IS HERE. EVERYONE."]
 ];
+// Gear: one piece per slot on Ash. The stash box keeps one item between nights.
+const GEAR={head:"hardhat",body:"vest",feet:"boots"};
+const STASHABLE=["flask","tea","flare","film","hardhat","vest"];
+const CRATE_ITEMS=["blueprint","camera","film","flare","oil","scrip","hardhat","vest"];
 const EXIT_NAME={hatch:"THE HATCH",lift:"GOING UP",chimney:"BACK THE WAY YOU CAME",drain:"WASHED OUT"};
 const VAR_NAME={alone:"ALONE",lamp:"THE FOREMAN'S LAMP",quiet:"QUIET SHIFT",sun:"TWO FOR THE SUNRISE"};
 const EXIT_TEXT={
@@ -1025,6 +1032,7 @@ function cleanSave(d){
   out.notes=Array.isArray(d.notes)?[...new Set(d.notes.filter(i=>Number.isInteger(i)&&i>=0&&i<NOTES.length))]:[];
   const ids=(a,n)=>Array.isArray(a)?[...new Set(a.filter(i=>Number.isInteger(i)&&i>=0&&i<n))]:[];
   out.diaries=ids(d.diaries,DIARIES.length); out.logs=ids(d.logs,LOGS.length);
+  if(STASHABLE.includes(d.stash)) out.stash=d.stash;
   for(const k of ["lastDeath","lastEnding","lastHelped","lantern"]) if(typeof d[k]==="string"&&d[k].length<24) out[k]=d[k];
   if(d.smudgeSaved===true) out.smudgeSaved=true;
   // journal: only known creatures, no repeats, and a photo only of something already met
@@ -1075,11 +1083,12 @@ let G=null, mode="title", last=performance.now();
 const keys=new Set();
 const fxRnd=mulberry(12345);
 
-function newGame(){
+function newGame(snap){
   const sv0=loadSave();
   let ev="none";
   if(sv0.runs){const r=Math.random(); ev=r<0.35?"none":["blackout","double","moved","shortage","early"][Math.floor((r-0.35)/0.13)]||"none";}
-  const map=genMap((Math.random()*1e9)|0,ev);
+  if(snap) ev=snap.ev;
+  const seed=snap?snap.seed:(Math.random()*1e9)|0, map=genMap(seed,ev);
   const rooms=map.rooms, rnd=map.rnd;
   const pick=minD=>{const c=rooms.filter(r=>r.dist>=minD); return c[Math.floor(rnd()*c.length)]||rooms[rooms.length-1];};
   const near=ev==="double"?2:0;
@@ -1094,7 +1103,7 @@ function newGame(){
     lis:{kind:"lis",room:lisRoom,inRoom:false,x:0,y:0,state:"wander",target:null,moveT:8,tx:0,ty:0,listenT:0,stunT:0,safeT:0,wx:160,wy:96,wT:0,idleT:0,exitDir:null,clickT:1},
     hitCool:0, heartT:0, shake:0, scare:null, slide:null, dying:null,
     distCur:null, exitSeen:false, toasts:{}, drips:[], motes:[], visitedCount:1,
-    scrip:0, boots:false, tea:0, flares:0, film:0, loaded:0, camera:false, blueprint:false, wrench:false, cam:null, flare:null, reloadT:0, ui:null, invSel:0, jSel:0, invMsg:"", helped:null, burnMul:1, sit:null, hatchCool:0, dlg:null, introPanel:null, metWick:false, jokeI:0,
+    seed, scrip:0, gear:{head:false,body:false,feet:false}, spare:{head:0,body:0,feet:0}, scanT:0, tea:0, flares:0, film:0, loaded:0, camera:false, blueprint:false, wrench:false, cam:null, flare:null, reloadT:0, ui:null, invSel:0, jSel:0, invMsg:"", helped:null, burnMul:1, sit:null, hatchCool:0, dlg:null, introPanel:null, metWick:false, jokeI:0,
     smudge:{follow:false,x:0,y:0}, officeLit:false, save:loadSave(),
     ev, lan:LANTERNS[0], crank:false, fuses:0, exitSeq:null, liftT:0, liftReady:false, liftClank:0,
     other:null, figure:null, echo:0, doorShut:null, wrongFace:0, hallT:60+Math.random()*40, blackShift:false, secret:false, enteredFrom:null,
@@ -1108,6 +1117,7 @@ function newGame(){
   G.roster=EA?shuffled(FOES,Math.random).slice(0,Math.random()<0.5?3:4):[]; G.foes=[]; G.foes=placeFoes();
   G.roomT=0; G.tickT=0; G.graceIn=0; G.hide=null; G.struggle=null; G.video=null; G.jSub=0;
   placeDiaries();
+  if(snap) applyNight(snap);
   G.distCur=bfs(rooms,G.room);
 }
 
@@ -1244,7 +1254,7 @@ function updateListener(dt){
     if(blocked) moveBox(G.room,e,(-dy/len)*sp*dt,(dx/len)*sp*dt,3,2); // slide round the obstacle
   }
   if(e.safeT<=0&&G.hitCool<=0&&!G.hide&&dist(e.x,e.y,G.p.x,G.p.y)<10){
-    scare("lis"); G.sludge=clamp(G.sludge+40,0,100); G.hitCool=3;
+    scare("lis"); G.sludge=clamp(G.sludge+vest(40),0,100); G.hitCool=3;
     e.state="stun"; e.stunT=1.2;
     if(G.sludge>=100) die("dark");
   }
@@ -1288,6 +1298,120 @@ function placeFoes(){
   }
   return out;
 }
+// The save point: a glitching screen on the wall. Saving keeps this exact night (its map comes back from the seed).
+const NIGHT_KEY=SAVE_KEY+".night";
+let savedNight=null, spPage="main", spMsg="";
+function readNight(){ try{ savedNight=cleanNight(JSON.parse(localStorage.getItem(NIGHT_KEY))); }catch(e){ savedNight=null; } return savedNight; }
+function clearNight(){ try{ localStorage.removeItem(NIGHT_KEY); }catch(e){} savedNight=null; }
+function nightSnapshot(){
+  const ent=e=>[e.room.id,e.gone?1:0,e.dead?1:0,e.calm?1:0,e.follow?1:0,e.v||0];
+  return {v:1,seed:G.seed,ev:G.ev,room:G.room.id,p:[G.p.x,G.p.y],t:G.elapsed,
+    n:{level:G.level,fuel:G.fuel,flasks:G.flasks,sludge:G.sludge,scrip:G.scrip,tea:G.tea,flares:G.flares,film:G.film,loaded:G.loaded,fuses:G.fuses,burnMul:G.burnMul,jokeI:G.jokeI,hallT:G.hallT,visitedCount:G.visitedCount},
+    b:{camera:G.camera,blueprint:G.blueprint,wrench:G.wrench,crank:G.crank,officeLit:G.officeLit,metWick:G.metWick,liftReady:G.liftReady,secret:G.secret,exitSeen:G.exitSeen,smudge:G.smudge.follow},
+    gear:G.gear, spare:G.spare, helped:G.helped, sealed:Object.keys(G.sealed), roster:G.roster,
+    foes:G.foes.filter(f=>!f.gone&&f.k!=="timekeeper").map(f=>[f.k,f.room.id,f.x,f.y,f.v||"",f.lx||0]),
+    moths:G.moths.map(ent), lis:ent(G.lis), plan:G.mothPlan.map(x=>[x.at,x.v]),
+    rooms:G.rooms.map(r=>[r.visited?1:0, r.item?1:0, r.oil.map(o=>[o.x,o.y]), r.scrip.map(c=>[c.x,c.y]), r.crates.map(c=>[c.open?1:0,c.item||""]),
+      r.diary?[r.diary.i,r.diary.x,r.diary.y]:0, r.valves?r.valves.map(v=>v.shut?1:0):0, r.logI===undefined?-1:r.logI, (r.scanned?1:0)|(r.exitSeen?2:0)|(r.didScan?4:0), r.tenants||0])};
+}
+// A saved night is checked like a save: anything out of place and it is thrown away rather than loaded.
+function cleanNight(o){
+  const num=(v,a,b)=>typeof v==="number"&&isFinite(v)&&v>=a&&v<=b, int=(v,a,b)=>Number.isInteger(v)&&v>=a&&v<=b, arr=(v,n)=>Array.isArray(v)&&v.length<=n, bool=v=>typeof v==="boolean";
+  const xy=a=>arr(a,12)&&a.every(q=>arr(q,2)&&num(q[0],0,W)&&num(q[1],0,H)), ent=a=>arr(a,6)&&a.length===6&&int(a[0],0,ROOMS-1)&&a.slice(1,5).every(x=>x===0||x===1)&&int(a[5],0,2);
+  if(!o||typeof o!=="object"||o.v!==1||!int(o.seed,0,1e9)||!(o.ev==="none"||(typeof o.ev==="string"&&o.ev in EVENTS))||!int(o.room,0,ROOMS-1)||!num(o.t,0,TIME_LIMIT)) return null;
+  if(!arr(o.p,2)||!num(o.p[0],0,W)||!num(o.p[1],0,H)||!o.n||!o.b||!o.gear||!o.spare) return null;
+  const lim={level:[0,3],fuel:[0,100],flasks:[0,3],sludge:[0,99.9],scrip:[0,999],tea:[0,9],flares:[0,9],film:[0,99],loaded:[0,3],fuses:[0,3],burnMul:[0.5,1],jokeI:[0,99],hallT:[0,1e9],visitedCount:[0,ROOMS]};
+  for(const k in lim) if(!num(o.n[k],...lim[k])) return null;
+  for(const k of ["camera","blueprint","wrench","crank","officeLit","metWick","liftReady","secret","exitSeen","smudge"]) if(!bool(o.b[k])) return null;
+  for(const sl in GEAR) if(!bool(o.gear[sl])||!int(o.spare[sl],0,9)) return null;
+  if(![null,"moth","lis"].includes(o.helped)||!arr(o.sealed,3)||!o.sealed.every(z=>PIPE_ZONES.includes(z))||!arr(o.roster,7)||!o.roster.every(k=>FOES.includes(k))) return null;
+  if(!arr(o.foes,ROOMS*2)||!o.foes.every(f=>arr(f,6)&&FOES.includes(f[0])&&f[0]!=="timekeeper"&&int(f[1],0,ROOMS-1)&&num(f[2],0,W)&&num(f[3],0,H)&&typeof f[4]==="string"&&f[4].length<9&&int(f[5],0,RW-1))) return null;
+  if(!arr(o.moths,3)||!o.moths.length||!o.moths.every(ent)||!ent(o.lis)||!arr(o.plan,2)||!o.plan.every(q=>arr(q,2)&&num(q[0],0,TIME_LIMIT)&&int(q[1],1,2))) return null;
+  if(!Array.isArray(o.rooms)||o.rooms.length!==ROOMS) return null;
+  for(const r of o.rooms) if(!arr(r,10)||r.length!==10||!(r[0]===0||r[0]===1)||!(r[1]===0||r[1]===1)||!xy(r[2])||!xy(r[3])
+    ||!arr(r[4],12)||!r[4].every(c=>arr(c,2)&&(c[0]===0||c[0]===1)&&(c[1]===""||CRATE_ITEMS.includes(c[1])))
+    ||!(r[5]===0||(arr(r[5],3)&&int(r[5][0],0,DIARIES.length-1)&&num(r[5][1],0,W)&&num(r[5][2],0,H)))
+    ||!(r[6]===0||(arr(r[6],3)&&r[6].every(x=>x===0||x===1)))||!int(r[7],-1,LOGS.length-1)||!int(r[8],0,7)||!int(r[9],0,3)) return null;
+  return o;
+}
+function applyNight(o){
+  Object.assign(G,o.n); for(const k in o.b) if(k!=="smudge") G[k]=o.b[k];
+  G.elapsed=o.t; G.blackShift=o.t>=SHIFT_T; G.toasts.shift=1; G.gear=Object.assign({},o.gear); G.spare=Object.assign({},o.spare);
+  G.helped=o.helped; G.sealed={}; o.sealed.forEach(z=>G.sealed[z]=true); G.roster=o.roster.slice(); G.mothPlan=o.plan.map(([at,v])=>({at,v}));
+  G.room=G.rooms[o.room]; G.p.x=o.p[0]; G.p.y=o.p[1]; G.p.dir="d"; G.graceIn=2;
+  G.rooms.forEach((r,i)=>{ const q=o.rooms[i];
+    r.visited=!!q[0]; if(!q[1]) r.item=null; r.oil=q[2].map(([x,y])=>({x,y})); r.scrip=q[3].map(([x,y])=>({x,y}));
+    if(q[4].length===r.crates.length) r.crates.forEach((c,j)=>{c.open=!!q[4][j][0]; c.item=q[4][j][1]||null;});
+    r.diary=q[5]?{i:q[5][0],x:q[5][1],y:q[5][2]}:null;
+    if(r.valves&&q[6]) r.valves.forEach((v,j)=>v.shut=!!q[6][j]);
+    r.logI=q[7]>=0?q[7]:undefined; r.scanned=!!(q[8]&1); r.exitSeen=!!(q[8]&2); r.didScan=!!(q[8]&4); r.tenants=q[9]; r.canvas=null;
+  });
+  G.foes=o.foes.filter(([k,id])=>(k!=="knocker"||G.rooms[id].broken)&&(k!=="tenant"||G.rooms[id].kind==="lockers"))
+    .map(([k,id,x,y,v,lx])=>{const f=makeFoe(k,G.rooms[id],x,y); if(v) f.v=v; if(k==="tenant"){f.lx=lx; f.x=lx*T+8;} return f;});
+  const ent=(e,a)=>{ e.room=G.rooms[a[0]]; e.gone=!!a[1]; e.dead=!!a[2]; e.calm=!!a[3]; e.follow=!!a[4]; e.inRoom=false; e.target=null; e.exitDir=null;
+    if(e.follow){e.room=G.room; e.inRoom=true; e.x=G.p.x+16; e.y=G.p.y+4;} else if(e.room===G.room) e.room=e.room.neighbors[0]; }; // nothing waits on top of Ash
+  G.moths=o.moths.map(a=>{const m=newMoth(a[5],G.rooms[a[0]]); ent(m,a); return m;}); G.moth=G.moths[0];
+  ent(G.lis,o.lis); if(!G.lis.follow) G.lis.state="wander";
+  G.smudge.follow=o.b.smudge; if(G.smudge.follow){G.smudge.x=G.p.x-12; G.smudge.y=G.p.y;}
+  G.room.visited=true; G.distCur=bfs(G.rooms,G.room); G.toasts["z_"+G.room.zone]=1;
+}
+function continueNight(){
+  const o=readNight(); if(!o) return;
+  audioStart(); stopLoops();
+  try{ newGame(o); }catch(e){ clearNight(); newGame(); } // a night that will not load is not worth a crash
+  startLoops(); mode="play"; pauseMenu.sel=0; pauseMenu.confirm=null; G.introPanel=null; tell("YOU PICK THE NIGHT BACK UP.");
+}
+function saveNight(){
+  try{ localStorage.setItem(NIGHT_KEY,JSON.stringify(nightSnapshot())); readNight(); spMsg="SAVED. QUIT ANY TIME, CONTINUE HERE."; sfx.chime(); }
+  catch(e){ spMsg="THIS DEVICE WOULD NOT SAVE."; }
+}
+function stashCount(id){ return id==="hardhat"?G.spare.head:id==="vest"?G.spare.body:G[{flask:"flasks",tea:"tea",flare:"flares",film:"film"}[id]]; }
+function stashAdd(id,d){ if(id==="hardhat") G.spare.head+=d; else if(id==="vest") G.spare.body+=d; else G[{flask:"flasks",tea:"tea",flare:"flares",film:"film"}[id]]+=d; }
+function stashPut(id){ stashAdd(id,-1); G.save.stash=id; writeSave(G.save); sfx.click(); spMsg=ITEMS[id].name+" STASHED. IT WILL WAIT FOR YOU."; spGo("main",true); }
+function stashTake(){
+  const id=G.save.stash; if(id==="flask"&&G.flasks>=3){spMsg="YOU CAN ONLY CARRY 3 FLASKS."; return;}
+  stashAdd(id,1); delete G.save.stash; writeSave(G.save); sfx.pickup(); spMsg="TOOK THE "+ITEMS[id].name+"."; spGo("main",true);
+}
+function scanMap(){
+  if(G.room.didScan){spMsg="IT ONLY SCANS ONCE."; return;}
+  const d=bfs(G.rooms,G.room); G.rooms.forEach(r=>{if(d[r.id]<=3) r.scanned=true;}); G.room.didScan=true; G.scanT=10; sfx.whisper(0);
+  spMsg=G.blueprint?"THE ROOMS NEARBY ARE ON YOUR MAP.":"THE ROOMS NEARBY, FOR TEN SECONDS.";
+}
+function spGo(p,keep){ spPage=p; saveMenu.sel=0; if(!keep) spMsg=""; }
+function openSavePoint(){ G.ui="save"; spGo("main"); nz({dur:0.3,freq:5200,q:2,gain:0.05}); tone({f0:220,f1:180,dur:0.3,gain:0.04}); }
+const saveMenu={sel:0,confirm:null,items:()=>{
+  const back={label:"BACK",fn:()=>spGo("main")};
+  if(spPage==="stash"){
+    if(G.save.stash) return [{label:"TAKE: "+ITEMS[G.save.stash].name,fn:stashTake},back];
+    return [...STASHABLE.filter(id=>stashCount(id)>0).map(id=>({label:"STORE: "+ITEMS[id].name,fn:()=>stashPut(id)})),back];
+  }
+  if(spPage==="gear") return [...Object.keys(GEAR).map(sl=>({label:sl.toUpperCase()+": "+(G.gear[sl]?ITEMS[GEAR[sl]].name:"NOTHING")+(G.spare[sl]?"  "+G.spare[sl]+" SPARE":""),
+    fn:()=>{ if(G.gear[sl]) takeOff(sl); else if(G.spare[sl]) wear(sl); else spMsg="NOTHING TO WEAR THERE."; }})),back];
+  if(spPage==="tapes") return [...G.save.logs.map(i=>({label:"TAPE "+(i+1)+": "+LOG_NAME[LOGS[i][0]],fn:()=>{G.ui=null; G.video={i,t:0,shown:0,beat:0};}})),back];
+  return [{label:"SAVE THE NIGHT",fn:saveNight},{label:"STASH BOX",fn:()=>spGo("stash")},{label:"SWAP GEAR",fn:()=>spGo("gear")},
+    {label:"REPLAY TAPES",fn:()=>{ if(G.save.logs.length) spGo("tapes"); else spMsg="NO TAPES FOUND YET."; }},{label:"SCAN THE MAP",fn:scanMap},{label:"LEAVE",fn:()=>{G.ui=null;}}];
+}};
+function renderSavePoint(){
+  const x=40, y=10, w=W-80, h=H-20, t=titleT, jx=Math.random()<0.08?(Math.random()<0.5?-2:2):0;
+  px(ctx,"rgba(0,0,0,.88)",0,0,W,H); uiFrame(ctx,x,y,w,h,"#3a3530","#06080c");
+  for(let yy=y+2;yy<y+h-2;yy+=2) px(ctx,"rgba(58,208,192,.05)",x+2,yy,w-4,1); // scan lines
+  px(ctx,"rgba(255,255,255,.04)",x+2,y+2+Math.floor((t*40)%(h-10)),w-4,6); // a rolling bar
+  if(Math.random()<0.2) px(ctx,anyOf(["#3ad0c0","#7a3aa8","#c4473a"]),x+2,y+4+Math.floor(Math.random()*(h-12)),w-4,1); // tearing
+  for(let i=0;i<14;i++) px(ctx,"rgba(232,228,220,.25)",x+2+Math.floor(Math.random()*(w-4)),y+2+Math.floor(Math.random()*(h-4)));
+  text(ctx,"SAVE POINT",W/2+jx-1,y+8,1,"#c4473a","c"); text(ctx,"SAVE POINT",W/2+jx+1,y+8,1,"#3ad0c0","c"); text(ctx,"SAVE POINT",W/2+jx,y+8,1,INK,"c");
+  const sub={stash:G.save.stash?"IN THE STASH":"STORE ONE ITEM FOR ANOTHER NIGHT",gear:"HEAD, BODY, FEET",tapes:"TAPES YOU HAVE FOUND"}[spPage]||(G.save.stash?"STASH: "+ITEMS[G.save.stash].name:"STASH: EMPTY");
+  text(ctx,sub,W/2,y+20,1,INK3,"c");
+  drawMenu(saveMenu,y+36);
+  if(spMsg) text(ctx,spMsg,W/2,y+h-24,1,FLAME,"c");
+  text(ctx,touchMode()?"TAP TO CHOOSE   BAG: BACK":"ARROWS: CHOOSE  "+K("use")+": PICK  ESC: BACK",W/2,y+h-12,1,INK3,"c");
+}
+function drawSavePoint(t){ // the console on the wall; its screen never settles
+  const x=15*T, f=Math.floor(t*12);
+  px(ctx,"#2a2622",x-13,1,26,14); px(ctx,"#3a3530",x-13,1,26,1); px(ctx,"#06080c",x-11,3,22,10);
+  for(let i=0;i<5;i++){const sh=(f+i*3)%7===0?Math.floor(fxRnd()*5)-2:0; px(ctx,["#3ad0c0","#7a3aa8","#c4473a","#e8e4dc","#3a6ad0"][(f+i)%5],x-10+Math.max(0,sh),4+i*2,Math.max(4,18-Math.abs(sh)*2),1);}
+  if(Math.sin(t*4)>0) px(ctx,"#e8e4dc",x+6,11,3,1);
+}
+
 // Tonight's diaries: the next unread page of each worker out tonight, plus one more; the infirmary gets one first.
 function placeDiaries(){
   const s=G.save, next=k=>DIARIES.findIndex((d,i)=>d[0]===k&&!s.diaries.includes(i)), want=[];
@@ -1400,7 +1524,7 @@ function moveFoe(f,tx,ty,sp,dt,free){
   else if(moveBox(G.room,f,mx,my,4,2)) moveBox(G.room,f,-my,mx,4,2); // slide round what is in the way
   return len;
 }
-function hurt(k,amt){ scare(k); G.sludge=clamp(G.sludge+amt,0,100); G.hitCool=3; if(G.sludge>=100) die(k); }
+function hurt(k,amt){ scare(k); G.sludge=clamp(G.sludge+vest(amt),0,100); G.hitCool=3; if(G.sludge>=100) die(k); }
 function foeSeen(f){
   const p=G.p, d=dist(f.x,f.y,p.x,p.y), L=lanternPos(p.x,p.y,p.dir);
   if(f.k==="knocker") return !G.sealed[f.room.zone]&&d<90;
@@ -1483,7 +1607,7 @@ const FOE={
       if(f.state==="hidden"){
         if(d<reach+46&&(f.knockT-=dt)<=0){f.knockT=1.1; sfx.knock(f.x); toast("kn","KNOCKING IN THE BROKEN PIPE. STAY BACK FROM IT.");}
         if(d<reach&&!G.hide&&G.graceIn<=0&&!G.dying){f.state="burst"; f.st=0; sfx.knock(f.x); G.shake=3;}
-      } else if(f.state==="burst"){ if((f.st+=dt)>0.55){f.state="reach"; f.st=0; if(dist(f.x,f.y,p.x,p.y)<reach+4&&!G.hide&&!G.dying&&!G.struggle) die("knocker");} }
+      } else if(f.state==="burst"){ if((f.st+=dt)>0.55){f.state="reach"; f.st=0; if(dist(f.x,f.y,p.x,p.y)<reach+4&&!G.hide&&!G.dying&&!G.struggle&&!armour("head","THE HARD HAT TOOK THE BLOW. IT'S GONE.")) die("knocker");} }
       else if((f.st+=dt)>1.1){f.state="hidden"; f.knockT=0.6;}
     },
     draw(f,t){
@@ -1607,7 +1731,7 @@ function strugglePress(code){
 }
 function endStruggle(won){
   const f=G.struggle.f; G.struggle=null;
-  if(!won){ die("roughneck"); return; }
+  if(!won&&!armour("head","THE HARD HAT SAVED YOU. IT'S GONE.")){ die("roughneck"); return; }
   const d=dist(f.x,f.y,G.p.x,G.p.y)||1; moveBox(G.room,f,(f.x-G.p.x)/d*16,(f.y-G.p.y)/d*16,4,2);
   f.state="stun"; f.st=3; G.hitCool=4; sfx.thud(); tell("YOU KICKED IT OFF. NOW FREEZE, OR GET AWAY.");
 }
@@ -1649,7 +1773,7 @@ function die(cause){
   stopLoops();
 }
 function finish(won,ending){
-  mode="end";
+  mode="end"; clearNight(); // the night is over, so there is nothing left to continue
   const s=G.save; s.runs=(s.runs||0)+1;
   const hadL=LANTERNS.filter(l=>l.has(s)).map(l=>l.id);
   const rooms=G.rooms.filter(r=>r.visited).length;
@@ -1802,11 +1926,11 @@ function buy(i){
   const cost=[3,5,4,6][i];
   if(G.scrip<cost){dialog([["WICK","NO SCRIP, NO DEAL. THOSE ARE THE RULES. I DIDN'T MAKE THEM. ...OKAY, I MADE THEM."]],shopMenu);return;}
   if(i===0&&G.flasks>=3){dialog([["WICK","YOU CAN'T CARRY MORE. I'M NOT A MIRACLE WORKER. I'M A WICK."]],shopMenu);return;}
-  if(i===1&&G.boots){dialog([["WICK","YOU'RE ALREADY WEARING THEM. I CHECKED."]],shopMenu);return;}
+  if(i===1&&(G.gear.feet||G.spare.feet)){dialog([["WICK","YOU'RE ALREADY WEARING THEM. I CHECKED."]],shopMenu);return;}
   if(i===2&&G.tea>=3){dialog([["WICK","THREE CUPS IS PLENTY. ANY MORE AND YOU'LL SLOSH."]],shopMenu);return;}
   G.scrip-=cost; sfx.coin();
   if(i===0){G.flasks++; dialog([["WICK","ONE FLASK. DON'T DRINK IT."]],shopMenu);}
-  if(i===1){G.boots=true; dialog([["WICK","SOFT BOOTS. BROKEN GLASS WON'T MAKE A SOUND UNDER YOU NOW."]],shopMenu);}
+  if(i===1){gainGear("feet"); dialog([["WICK","SOFT BOOTS. BROKEN GLASS WON'T MAKE A SOUND UNDER YOU NOW."]],shopMenu);}
   if(i===2){G.tea++; dialog([["WICK","BITTER TEA. DRINK IT WHEN THE BLACK GETS BAD. IT PULLS SOME OUT."]],shopMenu);}
   if(i===3){G.fuses++; dialog([["WICK","A FUSE. DON'T ASK WHERE I GOT IT."]],shopMenu);}
 }
@@ -1981,7 +2105,7 @@ function update(dt){
   if(G.reloadT>0){G.reloadT-=dt; if(G.reloadT<=0){const n=Math.min(G.film,3-G.loaded); G.film-=n; G.loaded+=n; sfx.click();}}
   if(mothsHere().length) journalSeen("moth");
   if(G.lis.inRoom&&!G.lis.gone) journalSeen("listener");
-  G.hatchCool=Math.max(0,G.hatchCool-dt);
+  G.hatchCool=Math.max(0,G.hatchCool-dt); G.scanT=Math.max(0,G.scanT-dt);
   if(G.sit){G.sit.t-=dt; if(G.sit.t<=0){endSit(); return;}}
   if(G.exitSeq&&updExitSeq(dt)) return;
   const timeUp=G.elapsed>=TIME_LIMIT;
@@ -2010,7 +2134,7 @@ function update(dt){
     if(p.stepT<=0){
       p.stepT=run?0.22:0.32; p.step=!p.step;
       const glass=tileAt(G.room,p.x,p.y)===4;
-      if(glass&&!G.boots){sfx.glass(run,p.x);noise(p.x,p.y,run?0.75:0.4);}
+      if(glass&&!G.gear.feet){sfx.glass(run,p.x);noise(p.x,p.y,run?0.75:0.4);}
       else if(wet){sfx.splash(p.x);noise(p.x,p.y,run?0.6:0.25);}
       else{sfx.step(run,p.x);noise(p.x,p.y,run?0.5:0.06);}
       if(G.echo>0){const ex=W-p.x; setTimeout(()=>sfx.step(run,ex),170);} // your own footsteps, a beat late, from the wrong side
@@ -2314,7 +2438,7 @@ function render(){
     ctx.setTransform(1,0,0,1,0,0);
     if(G.video) renderVideo();
     if(G.cam&&mode!=="end") renderCamera();
-    if(G.ui==="inv") renderInv(); else if(G.ui==="journal") renderJournal();
+    if(G.ui==="inv") renderInv(); else if(G.ui==="journal") renderJournal(); else if(G.ui==="save") renderSavePoint();
     if(mode==="pause") renderPause();
     if(mode==="end") renderEnd();
   }
@@ -2344,6 +2468,7 @@ function interactables(){
   for(const c of r.crates) if(!c.open||c.item) out.push({x:c.x,y:c.y+6,fn:()=>openCrate(r,c)});
   if(r.valves&&!G.turn) for(const v of r.valves) if(!v.shut) out.push({x:v.x,y:T+10,fn:()=>startTurn(r,v)});
   if(r.term) out.push({x:r.term.x,y:3*T+6,fn:useTerminal});
+  if(r.savept) out.push({x:15*T,y:T+12,fn:openSavePoint});
   if(r.hole) out.push({x:r.hole.x,y:7*T-4,fn:lookHole});
   if(r.kind==="lockers"&&!G.hide) for(const x of [2,3,4,5,6,7,12,13,14,15,16,17]) if(!isSolid(r.tiles[2*RW+x])) out.push({x:x*T+8,y:2*T+4,fn:()=>startHide(x)});
   return out;
@@ -2597,6 +2722,7 @@ function renderGame(){
   // the Smother is darker than the dark, with a faint edge; the gas glows
   for(const f of foesHere()) if(f.k==="smother"||f.k==="firedamp"){ ctx.globalAlpha=f.k==="firedamp"&&!on?0.6:1; FOE[f.k].draw(f,t); ctx.globalAlpha=1; }
   // a terminal screen glows through the dark
+  if(rm.savept) drawSavePoint(t); // it glows through the dark
   if(rm.term){const s=rm.term; px(ctx,"#0e2a16",s.x-8,s.y-12,16,10); for(let i=0;i<10;i++) px(ctx,fxRnd()<0.5?"#2e6a3a":"#4a9a5a",s.x-8+Math.floor(fxRnd()*15),s.y-12+Math.floor(fxRnd()*10)); if(Math.sin(t*5)>0) px(ctx,"#8fd09a",s.x-6,s.y-5,3,1);}
   // the Black Shift: tar comes in from every wall
   if(G.blackShift){
@@ -2667,13 +2793,14 @@ function drawPanels(){
   const mx0=Math.round(c-(9*cw)/2), my0=(slim?6:16)+top;
   if(!slim) text(plc,ZONE[G.room.zone].tag,c,5+top,1,INK3,"c");
   px(plc,"rgba(0,0,0,.55)",mx0-2,my0-2,9*cw+3,7*ch+3);
-  if(G.blueprint&&G.room.glitch){ // some rooms scramble it
+  const mapOn=G.blueprint||G.scanT>0;
+  if(mapOn&&G.room.glitch){ // some rooms scramble it
     for(let i=0;i<70;i++) px(plc,["#2e2b26","#6f685c","#141210"][i%3],mx0+Math.floor(fxRnd()*9*cw),my0+Math.floor(fxRnd()*7*ch),Math.max(1,cw-1),1);
-  } else if(G.blueprint){ // no map at all until the blueprint is found
+  } else if(mapOn){ // no map at all until the blueprint is found (or a save point scans)
   for(const r of G.rooms){
     const dx=r.x-G.room.x+4, dy=r.y-G.room.y+3;
     if(dx<0||dy<0||dx>8||dy>6) continue;
-    const known=r.visited||r.neighbors.some(n=>n.visited)||(r.hatch&&(G.helped==="lis"||r.exitSeen));
+    const known=r.visited||r.scanned||r.neighbors.some(n=>n.visited)||(r.hatch&&(G.helped==="lis"||r.exitSeen));
     if(!known) continue;
     const x=mx0+dx*cw, y=my0+dy*ch, mw=Math.max(1,cw-1), mh=Math.max(1,ch-1), mc=Math.floor(cw/2), mr=Math.floor(ch/2);
     if(r===G.room) px(plc,"#e8d6a8",x,y,mw,mh);
@@ -2718,6 +2845,8 @@ function drawPanels(){
   if(!slim) text(prc,"SHIFT",c,ty,1,INK3,"c");
   text(prc,fmt(left),c,ty+(slim?0:10),1,red?(Math.sin(G.elapsed*6)>0?BLOOD:"#7a2a22"):INK2,"c");
   if(G.scrip>0||G.metWick){const yy=ty+(slim?12:26), xx=c-(slim?8:12); px(prc,"#8a6a2a",xx,yy,5,5); px(prc,"#c9a04a",xx,yy,4,4); px(prc,"#f0d080",xx+1,yy+1); text(prc,String(G.scrip),xx+8,yy-1,1,INK2);}
+  const gs=slim?8:12, gy=ty+(slim?24:40), gx0=c-Math.round((3*gs+4)/2);
+  ["head","body","feet"].forEach((sl,i)=>{const x=gx0+i*(gs+2); px(prc,"#1c1a17",x,gy,gs,gs); px(prc,"#0b0a09",x+1,gy+1,gs-2,gs-2); if(G.gear[sl]) drawIcon(prc,GEAR[sl],x+1,gy+1,gs-2);});
 }
 // Messages still appear over the room: they are short and fade.
 function drawHud(){
@@ -2773,7 +2902,8 @@ function cycleInput(d){
 }
 const openSettings=()=>{settingsOpen=true; setMenu.sel=0;};
 const titleMenu={sel:0,confirm:null,items:()=>[
-  {label:"LIGHT THE LANTERN",fn:begin},
+  ...(savedNight?[{label:"CONTINUE THE NIGHT",fn:continueNight}]:[]),
+  {label:savedNight?"NEW NIGHT":"LIGHT THE LANTERN",confirm:savedNight?"START OVER? THE SAVED NIGHT GOES.":undefined,fn:()=>{clearNight(); begin();}},
   {label:"< "+curLantern().name+" >",fn:()=>cycleLantern(1),left:()=>cycleLantern(-1),right:()=>cycleLantern(1)},
   {label:"SETTINGS",fn:openSettings},
   {label:"EXPORT SAVE",confirm:"SAVE A FILE TO THIS DEVICE?",fn:exportSave},
@@ -2903,6 +3033,8 @@ function itemIcon(g,id,x,y){
   else if(id==="camera"){P("#2a2826",1,3,10,7); P("#4a4744",1,3,10,1); P("#2a2826",3,2,3,1); P("#8f8778",4,5,4,4); P("#141210",5,6,2,2); P("#e8e4dc",9,4,1,1);}
   else if(id==="film"){P("#141210",3,2,6,9); P("#e8c040",3,3,6,7); P("#141210",3,6,6,1); P("#8a6a2a",5,0,2,2); P("#2a2622",8,8,3,2);}
   else if(id==="blueprint"){P("#3a5a8a",1,2,10,8); P("#5a7aaa",1,2,10,1); P("#cfe0f0",3,4,4,1); P("#cfe0f0",3,6,6,1); P("#cfe0f0",6,4,1,4); P("#2a4a6a",10,3,1,7);}
+  else if(id==="hardhat"){P("#e8d23a",3,3,6,2); P("#e8d23a",2,5,8,3); P("#c8b030",1,8,10,1); P("#fff4a0",4,4,2,1); P("#c8b030",6,3,1,5);}
+  else if(id==="vest"){P("#e8742a",2,2,8,9); P("#141210",5,2,2,4); P("#e8e4dc",2,6,3,1); P("#e8e4dc",7,6,3,1); P("#e8e4dc",2,9,8,1);}
   else if(id==="boots"){P("#5a3a22",2,2,4,7); P("#5a3a22",2,8,8,2); P("#3a2614",2,10,8,1); P("#7a5233",3,2,2,1);}
   else if(id==="wrench"){for(let k=0;k<5;k++) P("#8f8778",2+k,8-k,2,2); P("#b8b0a0",7,1,4,2); P("#b8b0a0",7,3,1,2); P("#b8b0a0",10,3,1,2);}
   else if(id==="crank"){P("#5a4f45",2,7,8,2); P("#5a4f45",8,2,2,5); P("#2a2622",1,6,2,4);}
@@ -2911,14 +3043,23 @@ function itemIcon(g,id,x,y){
 }
 const icC=mk(12,12), icG=icC.getContext("2d");
 function drawIcon(g,id,x,y,sz){ icG.clearRect(0,0,12,12); itemIcon(icG,id,0,0); g.imageSmoothingEnabled=false; g.drawImage(icC,Math.round(x),Math.round(y),sz,sz); }
-const FLOOR_ICONS=["blueprint","camera","film","flare","wrench"];
+const FLOOR_ICONS=["blueprint","camera","film","flare","wrench","hardhat","vest"];
 function floorItem(g,it){ drawIcon(g,it.kind,it.x-6,it.y-11,12); if(Math.sin(G.elapsed*3+it.x)>0.9) px(g,"#fff1c8",it.x+3,it.y-10); }
 function drawFlare(f){
   const x=Math.round(f.x), y=Math.round(f.y);
   px(ctx,"#7a2a22",x-1,y-3,2,4); px(ctx,Math.sin(G.elapsed*40)>0?"#ffd0a0":"#f2c35a",x-1,y-5,2,2);
   if(Math.random()<0.6) px(ctx,"#ff7a4a",x-2+Math.floor(Math.random()*4),y-7-Math.floor(Math.random()*4));
 }
+// one piece worn per slot; anything more goes in the bag as a spare
+function gainGear(slot){ if(G.gear[slot]) G.spare[slot]++; else G.gear[slot]=true; }
+function wear(slot){ if(G.gear[slot]) return "ALREADY WEARING ONE."; if(!G.spare[slot]) return "NONE TO WEAR."; G.spare[slot]--; G.gear[slot]=true; sfx.click(); }
+function takeOff(slot){ if(!G.gear[slot]) return; G.gear[slot]=false; G.spare[slot]++; sfx.click(); }
+// armour takes one hit, then it is gone
+function armour(slot,msg){ if(!G.gear[slot]) return false; G.gear[slot]=false; sfx.clank(); G.shake=Math.max(G.shake,6); tell(msg); return true; }
+const vest=n=>armour("body","THE VEST TORE. IT TOOK HALF OF THAT.")?n/2:n;
 function pickUp(kind){
+  if(kind==="hardhat"){gainGear("head"); tell(G.spare.head?"A SPARE HARD HAT. IT'S IN THE BAG.":"A HARD HAT. YOU PUT IT ON.");}
+  if(kind==="vest"){gainGear("body"); tell(G.spare.body?"A SPARE WORK VEST. IT'S IN THE BAG.":"A WORK VEST. YOU PUT IT ON.");}
   if(kind==="blueprint"){G.blueprint=true; tell("THE BLUEPRINT. NOW YOU HAVE A MAP.");}
   if(kind==="camera"){G.camera=true; G.loaded=Math.max(G.loaded,2); tell("A CAMERA. TWO SHOTS LEFT. RAISE IT FROM THE BAG.");}
   if(kind==="film"){G.film+=2; tell("TWO ROLLS OF FILM. "+K("reload")+" LOADS THEM.");}
@@ -2935,7 +3076,9 @@ const ITEMS={
   camera:{name:"CAMERA",desc:"PHOTOS GO IN THE JOURNAL. ASH STANDS STILL WHILE IT IS UP.",n:()=>G.camera?1:0,use:()=>toggleCamera(),verb:"RAISE"},
   film:{name:"FILM",desc:"ONE PHOTO EACH. THE CAMERA HOLDS THREE.",n:()=>G.film},
   blueprint:{name:"BLUEPRINT",desc:"A MAP OF THE WORKS. IT SHOWS ON THE LEFT.",n:()=>G.blueprint?1:0},
-  boots:{name:"SOFT BOOTS",desc:"BROKEN GLASS MAKES NO SOUND UNDER YOU.",n:()=>G.boots?1:0},
+  boots:{name:"SOFT BOOTS",desc:"FEET. BROKEN GLASS MAKES NO SOUND UNDER YOU.",n:()=>G.spare.feet,use:()=>wear("feet"),verb:"WEAR"},
+  hardhat:{name:"HARD HAT",desc:"HEAD. STOPS ONE DEADLY CATCH, THEN IT BREAKS.",n:()=>G.spare.head,use:()=>wear("head"),verb:"WEAR"},
+  vest:{name:"WORK VEST",desc:"BODY. HALVES THE BLACK FROM ONE CATCH, THEN IT TEARS.",n:()=>G.spare.body,use:()=>wear("body"),verb:"WEAR"},
   wrench:{name:"WRENCH",desc:"TURNS VALVE WHEELS TWICE AS FAST.",n:()=>G.wrench?1:0},
   crank:{name:"CRANK",desc:"IT FITS A HATCH SOMEWHERE.",n:()=>G.crank?1:0},
   fuse:{name:"FUSES",desc:"THE LIFT NEEDS THREE.",n:()=>G.fuses},
@@ -3002,14 +3145,16 @@ function renderInv(){
   px(ctx,"rgba(0,0,0,.85)",0,0,W,H);
   uiFrame(ctx,12,8,W-24,H-16,INK3,"rgba(5,5,5,.96)","#1c1a17");
   text(ctx,"BAG",W/2,14,1,INK,"c"); px(ctx,"#2a2622",24,24,W-48,1);
-  const items=invItems(), gx=24, gy=32, sz=28, gap=4; G.invSel=clamp(G.invSel,0,11); G.invHits=[]; G.invUseHit=null;
-  for(let i=0;i<12;i++){
-    const x=gx+(i%4)*(sz+gap), y=gy+Math.floor(i/4)*(sz+gap), id=items[i], on=i===G.invSel;
+  const items=invItems(), gx=24, gy=32, sz=28, gap=4; G.invSel=clamp(G.invSel,0,14); G.invHits=[]; G.invUseHit=null;
+  for(let i=0;i<15;i++){
+    const x=gx+(i%5)*(sz+gap), y=gy+Math.floor(i/5)*(sz+gap), id=items[i], on=i===G.invSel;
     uiFrame(ctx,x,y,sz,sz,on?FLAME:"#2a2622",on?"#1a1208":"#0b0a09");
     if(id){ drawIcon(ctx,id,x+2,y+2,24); const n=ITEMS[id].n(); if(n>1) text(ctx,String(n),x+sz-3,y+sz-9,1,INK,"r","#000"); }
     G.invHits.push({i,x,y,w:sz,h:sz});
   }
-  const id=items[G.invSel], rx=gx+4*(sz+gap)+10, rw=W-24-rx;
+  const id=items[G.invSel], rx=gx+5*(sz+gap)+10, rw=W-24-rx;
+  text(ctx,"WEARING",gx,gy+3*(sz+gap)+4,1,INK3); // head, body, feet
+  ["head","body","feet"].forEach((sl,i)=>{const x=gx+48+i*16, y=gy+3*(sz+gap)+1; uiFrame(ctx,x,y,14,14,"#2a2622","#0b0a09"); if(G.gear[sl]) drawIcon(ctx,GEAR[sl],x+1,y+1,12);});
   if(id){ const it=ITEMS[id];
     text(ctx,it.name,rx,gy,1,FLAME);
     wrapText(it.desc,Math.floor(rw/6)).forEach((l,i)=>text(ctx,l,rx,gy+14+i*10,1,INK2));
@@ -3019,10 +3164,14 @@ function renderInv(){
   text(ctx,touchMode()?"JOYSTICK: CHOOSE   USE: USE   BAG: CLOSE":"ARROWS: CHOOSE   "+K("use")+": USE   "+K("inventory")+": CLOSE",W/2,H-20,1,INK3,"c");
 }
 function uiKey(code){
+  if(G.ui==="save"){
+    if(code==="Escape"||code==="Tab"||code==="KeyB"){ if(spPage!=="main") spGo("main"); else G.ui=null; return; }
+    menuKey(saveMenu,code); return;
+  }
   if(G.ui==="inv"){
     if(code==="Tab"||code==="Escape"){G.ui=null;return;}
-    const mv={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-4,ArrowUp:-4,KeyS:4,ArrowDown:4}[code];
-    if(mv){G.invSel=clamp(G.invSel+mv,0,11); G.invMsg=""; sfx.click(); return;}
+    const mv={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-5,ArrowUp:-5,KeyS:5,ArrowDown:5}[code];
+    if(mv){G.invSel=clamp(G.invSel+mv,0,14); G.invMsg=""; sfx.click(); return;}
     if(code==="Space"||code==="Enter"){ const id=invItems()[G.invSel]; G.invPressT=performance.now();
       if(!id) return; const it=ITEMS[id]; if(!it.use){G.invMsg="NOTHING TO DO WITH IT RIGHT NOW."; return;}
       const msg=it.use(); if(msg){G.invMsg=msg; sfx.click();} else G.ui=null; }
@@ -3038,6 +3187,7 @@ function uiKey(code){
   }
 }
 function uiTap(x,y){
+  if(G.ui==="save"){ const h=(saveMenu.hits||[]).find(h=>y>=h.y0&&y<h.y1); if(h){saveMenu.sel=h.i; menuKey(saveMenu,"Enter");} return; }
   if(G.ui==="inv"){
     const h=(G.invHits||[]).find(h=>x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h);
     if(h){ if(h.i===G.invSel) uiKey("Space"); else {G.invSel=h.i; G.invMsg=""; sfx.click();} return; }
@@ -3348,11 +3498,13 @@ function loop(now){
   const camUp=G&&G.cam?"1":""; if(document.body.dataset.cam!==camUp) document.body.dataset.cam=camUp;
   requestAnimationFrame(loop);
 }
+readNight();
 requestAnimationFrame(loop);
 
 /* ================= self-check (run LastLight.selfTest() in the console) ================= */
 if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
   get state(){return G;}, get mode(){return mode;}, key:k=>dialogKey(k), talk:k=>({wick:talkWick,gauge:talkGauge,smudge:talkSmudge,office:talkOffice,whistle:talkWhistle,hatch:atHatch})[k](), exit:t=>atExit(t), payload:()=>savePayload(), apply:o=>applyPayload(o), code:()=>saveCode(), hall:()=>hallucinate(), map:seed=>genMap(seed),
+  night:()=>nightSnapshot(), clean:o=>cleanNight(o),
   spawn:(k,x,y)=>{const f=makeFoe(k,G.room,x,y); G.foes.push(f); return f;}, press:c=>strugglePress(c), face:k=>scareFace(k),
   selfTest(n){
     n=n||40;
@@ -3387,6 +3539,9 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
       console.assert(count(m,"blueprint")===1&&bp[0].dist>=1&&bp[0].dist<=3,"blueprint within 3 rooms of the start");
       console.assert(count(m,"camera")===1,"one camera");
       console.assert(count(m,"film")===3&&count(m,"flare")===2&&count(m,"wrench")===1,"film, flares and the wrench placed");
+      console.assert(count(m,"hardhat")===1&&count(m,"vest")===1,"a hard hat and a vest each night");
+      const sps=m.rooms.filter(r=>r.savept);
+      console.assert(sps.length>=1&&sps.length<=3&&sps.every(r=>!r.broken&&!r.special&&r.reach[1*RW+15]),"one to three save points, each in reach");
       console.assert(new Set(m.rooms.map(r=>r.zone)).size===ZONES.length&&m.start.zone==="storage","seven zones, the start in Storage");
       for(const z of ZONES){
         const zr=m.rooms.filter(r=>r.zone===z.id), seen=new Set([zr[0]]), q=[zr[0]];
@@ -3411,6 +3566,8 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
     console.assert(JIDS.length===BESTIARY.length&&BESTIARY.every(b=>JIDS.includes(b.id)),"every journal page has art");
     console.assert(FOES.every(k=>DIARIES.filter(d=>d[0]===k).length===3)&&DIARIES.every((d,i)=>diaryNo(i)===3||d[1].endsWith("-"+WORKERS[d[0]])),"three diaries a worker, the readable ones signed");
     console.assert(DIARIES.concat(LOGS).every(d=>[...d[1]].every(ch=>FONT[ch]))&&LOGS.every(l=>LOG_C[l[0]]),"every diary and tape can be drawn with the font, every tape has a colour");
+    console.assert(cleanNight(null)===null&&cleanNight({v:1,seed:-5})===null&&cleanNight({v:2})===null,"broken saved nights are refused");
+    console.assert(cleanSave({stash:"camera"}).stash===undefined&&cleanSave({stash:"vest"}).stash==="vest","only gear and supplies go in the stash");
     const cd=cleanSave({diaries:[0,0,20,21,-1,"2",1.5],logs:[7,8,"x"]});
     console.assert(cd.diaries.join()==="0,20"&&cd.logs.join()==="7","diaries and tapes cleaned");
     console.assert(FOES.every(k=>FOE[k].upd&&FOE[k].draw&&JIDS.includes(k)&&SHAKE[k]&&scareFace(k).width===48),"every new enemy has behaviour, art, a page, a shake and a scare face");
