@@ -27,6 +27,19 @@ try{const old=localStorage.getItem("lastlight.v1"); if(old!==null&&localStorage.
 const OTHER_T=480, SHIFT_T=900;          // when the Other starts showing up, when the Black Shift starts
 const EXIT_TYPES=["hatch","lift","chimney","drain"];
 const JIDS=["moth","listener","roughneck","tarling","knocker","smother","tenant","firedamp","timekeeper"]; // journal pages
+// The Works in seven zones. Each is one connected cluster of rooms with its own floor, props and kinds of room (weights add up to 100).
+const ZONES=[
+  {id:"storage",name:"STORAGE",tag:"STORAGE",floor:"#1f1f1e",mc:"#6f685c",kinds:[["plain",50],["storage",20],["rats",15],["lockers",15]]},
+  {id:"barracks",name:"THE BARRACKS",tag:"BARRACKS",floor:"#22201c",mc:"#6e5f50",kinds:[["dorm",35],["lockers",30],["chapel",15],["plain",20]]},
+  {id:"offices",name:"THE OFFICES",tag:"OFFICES",floor:"#241f19",mc:"#6a6458",kinds:[["office",50],["plain",35],["chapel",15]]},
+  {id:"pump",name:"THE PUMP HOUSE",tag:"PUMPS",floor:"#1d221d",mc:"#56665a",kinds:[["pump",45],["plain",40],["flooded",15]]},
+  {id:"boiler",name:"THE BOILER WORKS",tag:"BOILERS",floor:"#271c17",mc:"#73574a",kinds:[["boiler",50],["plain",50]]},
+  {id:"sump",name:"THE FLOODED SUMP",tag:"SUMP",floor:"#1a2022",mc:"#4f6266",kinds:[["flooded",55],["nest",20],["rats",10],["plain",15]]},
+  {id:"drill",name:"THE DRILL FLOOR",tag:"DRILL",floor:"#261d16",mc:"#6b5547",kinds:[["plain",45],["nest",20],["pump",15],["boiler",20]]}
+];
+const ZONE=Object.fromEntries(ZONES.map(z=>[z.id,z]));
+const MUST={storage:["storage","storage"],barracks:["infirmary"],offices:["terminal"],pump:["valve"],boiler:["valve"],sump:["valve","rats"],drill:["drill"]}; // in every run
+const PIPE_ZONES=["pump","boiler","sump"]; // broken pipes here, until the zone's valve room is shut
 
 const cv=document.getElementById("c");
 const ctx=cv.getContext("2d");
@@ -42,12 +55,13 @@ function mk(w,h){const c=document.createElement("canvas");c.width=w;c.height=h;r
 function shuffled(arr,rnd){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function fmt(s){s=Math.max(0,Math.ceil(s));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");}
 // turn soft-edged shapes into hard pixels
+const tint=(h,d)=>"#"+[1,3,5].map(i=>clamp(parseInt(h.substr(i,2),16)+d,0,255).toString(16).padStart(2,"0")).join("");
 function crisp(c){const g=c.getContext("2d");const d=g.getImageData(0,0,c.width,c.height);for(let i=3;i<d.data.length;i+=4)d.data[i]=d.data[i]>110?255:0;g.putImageData(d,0,0);return c;}
 
 /* ================= map ================= */
 function genMap(seed,ev){
   const rnd=mulberry(seed);
-  for(let attempt=0;attempt<300;attempt++){
+  gen: for(let attempt=0;attempt<300;attempt++){
     const grid=new Map(), key=(x,y)=>x+","+y;
     const list=[{x:0,y:0}]; grid.set("0,0",list[0]);
     const q=[list[0]]; let guard=0;
@@ -90,31 +104,74 @@ function genMap(seed,ev){
     pickR(r=>r.dist>=4&&r.dist<=9).special="smudge";
     pickR(r=>r.dist>=4).special="office";
     pickR(r=>r.dist>=4).special="whistle";
-    // what each ordinary room was, back when this place worked
-    const KINDS=[["plain",40],["boiler",12],["dorm",10],["lockers",10],["flooded",9],["pump",8],["chapel",6],["nest",5]];
+    // the zones, the rooms each one always has, then what every other room was back when this place worked
+    if(!assignZones(list,rnd)) continue;
+    for(const z of ZONES){
+      const free=shuffled(list.filter(r=>r.zone===z.id&&!used.has(r)),rnd);
+      if(free.length<MUST[z.id].length+1) continue gen;
+      MUST[z.id].forEach((k,i)=>free[i].kind=k);
+    }
     list.forEach(r=>{
       r.ev=ev;
       if(used.has(r)) {r.kind="plain"; return;}
-      let w=rnd()*100; r.kind="plain"; for(const [k,n] of KINDS){if(w<n){r.kind=k;break;} w-=n;}
+      if(r.kind) return;
+      let w=rnd()*100; r.kind="plain"; for(const [k,n] of ZONE[r.zone].kinds){if(w<n){r.kind=k;break;} w-=n;}
+    });
+    // two or three broken pipes in each wet or hot zone, never across the north door
+    for(const zid of PIPE_ZONES) shuffled(list.filter(r=>r.zone===zid&&!used.has(r)&&r.kind!=="valve"),rnd).slice(0,2+Math.floor(rnd()*2)).forEach(r=>{
+      r.broken=true; r.brokenX=[2,3,4,5,6,13,14,15,16][Math.floor(rnd()*9)]*T+4;
     });
     list.forEach(r=>buildRoom(r,r===list[0],!!r.exitT));
-    // what the exits need: a crank for the hatch, three fuses for the lift
     const spare=()=>shuffled(list.filter(r=>!used.has(r)&&r.dist>=3&&!r.item),rnd)[0]||list.find(r=>!used.has(r)&&!r.item);
     const place=(r,kind)=>{const [x,y]=freeSpot(r,rnd); r.item={kind,x:x*T+8,y:y*T+9};};
+    const near=(lo,hi)=>{for(let h=hi;h<30;h++){const c=shuffled(list.filter(r=>!used.has(r)&&!r.item&&r.dist>=lo&&r.dist<=h),rnd); if(c.length) return c[0];} return spare();};
+    // the blueprint waits in a crate a few rooms from the start, the camera in a storeroom, film and flares in crates anywhere
+    const crateIn=(rs,kind)=>{
+      rs=rs.filter(r=>!used.has(r));
+      const c=shuffled(rs.flatMap(r=>r.crates.filter(c=>!c.item)),rnd)[0];
+      if(c){c.item=kind; return true;}
+      for(const r of shuffled(rs,rnd)){const n=addCrate(r,rnd); if(n){n.item=kind; return true;}}
+      return false;
+    };
+    if(!crateIn(list.filter(r=>r.dist>=1&&r.dist<=3),"blueprint")) place(near(1,3),"blueprint");
+    if(!crateIn(list.filter(r=>r.kind==="storage"),"camera")) place(near(2,6),"camera");
+    for(let k=0;k<3;k++) crateIn(list,"film")||place(spare(),"film");
+    for(let k=0;k<2;k++) crateIn(list,"flare")||place(spare(),"flare");
+    // what the exits need: a crank for the hatch, three fuses for the lift; and a wrench, all on the floor
     if(exits.some(e=>e.exitT==="hatch")) place(spare(),"crank");
     if(exits.some(e=>e.exitT==="lift")) for(let k=0;k<3;k++) place(spare(),"fuse");
-    // the blueprint is always close to the start; the camera a little further; film, flares and a wrench about
-    const near=(lo,hi)=>{for(let h=hi;h<30;h++){const c=shuffled(list.filter(r=>!used.has(r)&&!r.item&&r.dist>=lo&&r.dist<=h),rnd); if(c.length) return c[0];} return spare();};
-    place(near(1,3),"blueprint"); place(near(2,6),"camera");
-    for(let k=0;k<3;k++) place(spare(),"film");
-    for(let k=0;k<2;k++) place(spare(),"flare");
     place(spare(),"wrench");
-    list.forEach(r=>{ r.noNight=r!==list[0]&&rnd()<0.12; }); // night vision shows only static here
+    for(const r of list) for(const c of r.crates) if(!c.item){const w=rnd(); c.item=w<0.3?"scrip":w<(ev==="shortage"?0.36:0.45)?"oil":null;}
+    list.forEach(r=>{ r.noNight=r!==list[0]&&rnd()<0.12; r.glitch=r!==list[0]&&rnd()<0.08; }); // night vision shows only static here; the map can't be read here
     // eight worker notes, scattered
     shuffled(list.filter(r=>!used.has(r)),rnd).slice(0,NOTES.length).forEach((r,i)=>{const [x,y]=freeSpot(r,rnd); r.note={i,x:x*T+8,y:y*T+9};});
     return {rooms:list,start:list[0],exit:exit,exits:exits,rnd:rnd};
   }
   throw new Error("map generation failed");
+}
+
+// Seven seeds spread as far apart as they can be, grown outwards together, so each zone is one piece.
+// The start seeds Storage and the seed farthest from it the Drill Floor.
+function assignZones(list,rnd){
+  const seeds=[list[0]], dists=[bfs(list,list[0])];
+  while(seeds.length<ZONES.length){
+    let best=null,bd=-1;
+    for(const r of shuffled(list,rnd)){const d=Math.min(...dists.map(D=>D[r.id])); if(d>bd){bd=d;best=r;}}
+    seeds.push(best); dists.push(bfs(list,best));
+  }
+  const order=[seeds[0]].concat(seeds.slice(1).sort((a,b)=>a.dist-b.dist));
+  const ids=["storage",...shuffled(["barracks","offices","pump","boiler","sump"],rnd),"drill"];
+  list.forEach(r=>r.zone=null); order.forEach((s,i)=>s.zone=ids[i]);
+  // zones take turns to grow by one room into a random free neighbour, up to a cap, so they come out about the same size
+  const cap=Math.ceil(list.length/ZONES.length)+1, size=Object.fromEntries(ids.map(id=>[id,1]));
+  for(let grew=true;grew;){ grew=false;
+    for(const id of ids){ if(size[id]>=(id==="storage"?cap-3:cap)) continue; // Storage sits in the middle and picks up the dead ends left over
+      const opts=list.filter(r=>r.zone===id).flatMap(r=>r.neighbors.filter(n=>!n.zone)); if(!opts.length) continue;
+      opts[Math.floor(rnd()*opts.length)].zone=id; size[id]++; grew=true; }
+  }
+  for(let left=list.filter(r=>!r.zone);left.length;left=left.filter(r=>!r.zone)) // anything left joins the smallest zone it touches
+    for(const r of left){const zs=r.neighbors.filter(n=>n.zone).map(n=>n.zone); if(zs.length){r.zone=zs.sort((a,b)=>size[a]-size[b])[0]; size[r.zone]++;}}
+  return ZONES.every(z=>list.filter(r=>r.zone===z.id).length>=5);
 }
 
 function bfs(rooms,from){
@@ -156,28 +213,68 @@ function buildRoom(r,isStart,isExit){
   if(r.kind==="lockers"){for(let x=2;x<=17;x++) if(x<8||x>11) t[1*RW+x]=6;}
   if(r.kind==="pump"){r.pumpX=rnd()<0.5?3:14; for(let y=2;y<=3;y++)for(let k=0;k<3;k++) t[y*RW+r.pumpX+k]=6;}
   if(r.kind==="chapel"){for(const y of [3,8]) for(const x of [3,4,5,6,13,14,15,16]) t[y*RW+x]=6;}
-  r.tiles=t;
+  // 7 = crate (solid, can be opened), 8 = the bore hole (solid)
+  if(r.kind==="office"){for(const [x,y] of [[3,3],[4,3],[15,3],[16,3],[3,8],[4,8],[15,8],[16,8]]) t[y*RW+x]=6;}
+  if(r.kind==="infirmary"){for(const y of [2,3,8,9]) for(const x of [2,5,14,17]) t[y*RW+x]=6;}
+  if(r.kind==="terminal"){t[2*RW+4]=6; t[2*RW+5]=6; t[3*RW+4]=0; t[3*RW+5]=0; t[4*RW+4]=0; t[4*RW+5]=0; r.term={x:5*T,y:2*T+4};}
+  if(r.kind==="valve") r.valves=[3*T+8,6*T+8,14*T+8].map(x=>({x,shut:false,a:0}));
+  if(r.kind==="drill"){for(let y=7;y<=9;y++)for(let x=13;x<=16;x++) t[y*RW+x]=8; r.hole={x:15*T,y:8.5*T};}
+  r.tiles=t; r.crates=[]; r.decor=[];
+  computeReach(r);
+  if(!isStart&&!r.special&&!isExit){
+    const n=r.kind==="storage"?6+Math.floor(rnd()*4):(r.kind!=="terminal"&&rnd()<0.2?1+Math.floor(rnd()*2):0);
+    for(let k=0;k<n;k++) addCrate(r,rnd);
+  }
   r.lamps=[];
-  if(!isStart&&r.kind!=="lockers"){const n=rnd()<0.45?1:(rnd()<0.25?2:0); for(let k=0;k<n;k++){let tx=5+Math.floor(rnd()*10); if(tx>=8&&tx<=11) tx=rnd()<0.5?5:14; r.lamps.push({x:tx*T+8,y:19,dead:r.ev==="blackout"||rnd()<0.25,dieAt:rnd()<0.5?120+rnd()*800:1e9,ph:rnd()*9});}}
+  if(!isStart&&!["lockers","valve","drill"].includes(r.kind)){const n=rnd()<0.45?1:(rnd()<0.25?2:0); for(let k=0;k<n;k++){let tx=5+Math.floor(rnd()*10); if(tx>=8&&tx<=11) tx=rnd()<0.5?5:14; r.lamps.push({x:tx*T+8,y:19,dead:r.ev==="blackout"||rnd()<0.25,dieAt:rnd()<0.5?120+rnd()*800:1e9,ph:rnd()*9});}}
   r.scrawl=!isStart&&rnd()<0.22?SCRAWLS[Math.floor(rnd()*SCRAWLS.length)]:null;
   r.blood=!isStart&&rnd()<0.3;
-  const freeTile=()=>{for(let k=0;k<200;k++){const [x,y]=inner(); if(t[y*RW+x]===0) return [x,y];} return [9,5];};
+  const freeTile=()=>{for(let k=0;k<200;k++){const [x,y]=inner(); if(t[y*RW+x]===0&&r.reach[y*RW+x]) return [x,y];} return [9,5];};
   if(!isStart && rnd()<(r.ev==="shortage"?0.13:0.3)){const [x,y]=freeTile(); r.oil.push({x:x*T+8,y:y*T+10});}
   r.scrip=[];
   if(!isStart && rnd()<(r.ev==="shortage"?0.7:0.45)) for(let k=0,n=rnd()<0.35?2:1;k<n;k++){const [x,y]=freeTile(); r.scrip.push({x:x*T+4+Math.floor(rnd()*8),y:y*T+6+Math.floor(rnd()*6)});}
+  // the dead, and what is left of them
+  if(!isStart&&!r.special){
+    for(let k=0,n=r.kind==="infirmary"?2:rnd()<0.1?1:0;k<n;k++){const [x,y]=freeTile(); r.decor.push({k:"corpse",x:x*T+8,y:y*T+9,f:rnd()<0.5});}
+    if(rnd()<0.07){const [x,y]=freeTile(); r.decor.push({k:"skel",x:x*T+8,y:y*T+9,f:rnd()<0.5});}
+  }
+  if(!isStart&&rnd()<0.18) for(let k=0,n=2+Math.floor(rnd()*4);k<n;k++){const [x,y]=freeTile(); r.decor.push({k:"moth",x:x*T+3+Math.floor(rnd()*10),y:y*T+4+Math.floor(rnd()*9)});}
   r.hatch=isExit?{x:160,y:84}:null;   // every way out sits in the middle of its room
 }
 
+// Which tiles Ash can walk to from the centre of the room (the cross between the doors is always open).
+function computeReach(r){
+  const t=r.tiles, seen=new Uint8Array(RW*RH), q=[5*RW+9]; seen[q[0]]=1; let n=1;
+  while(q.length){const i=q.pop(), x=i%RW, y=(i/RW)|0;
+    for(const [dx,dy] of DIRS){const nx=x+dx, ny=y+dy, j=ny*RW+nx; if(nx>=0&&ny>=0&&nx<RW&&ny<RH&&!seen[j]&&!isSolid(t[j])){seen[j]=1; n++; q.push(j);}}}
+  r.reach=seen; return n;
+}
+// A crate only goes where it walls nothing off and nothing is lying there already.
+function addCrate(r,rnd){
+  const t=r.tiles, before=computeReach(r);
+  const busy=(x,y)=>r.oil.concat(r.scrip||[],r.item?[r.item]:[],r.note?[r.note]:[]).some(o=>Math.floor(o.x/T)===x&&Math.floor(o.y/T)===y);
+  for(let k=0;k<40;k++){
+    const x=2+Math.floor(rnd()*(RW-4)), y=2+Math.floor(rnd()*(RH-4)), i=y*RW+x;
+    if((x>=8&&x<=11)||(y>=4&&y<=7)||t[i]!==0||!r.reach[i]||busy(x,y)) continue;
+    t[i]=7;
+    if(computeReach(r)===before-1){const c={tx:x,ty:y,x:x*T+8,y:y*T+8,open:false,item:null}; r.crates.push(c); r.canvas=null; return c;}
+    t[i]=0; computeReach(r);
+  }
+  return null;
+}
+
 function freeSpot(r,rnd){
-  for(let k=0;k<200;k++){const x=2+Math.floor(rnd()*(RW-4)), y=2+Math.floor(rnd()*(RH-4)); if(r.tiles[y*RW+x]===0&&!(x>=8&&x<=11&&y>=4&&y<=6)) return [x,y];}
-  return [4,4];
+  const ok=(x,y)=>r.tiles[y*RW+x]===0&&r.reach[y*RW+x]&&!(x>=8&&x<=11&&y>=4&&y<=6);
+  for(let k=0;k<200;k++){const x=2+Math.floor(rnd()*(RW-4)), y=2+Math.floor(rnd()*(RH-4)); if(ok(x,y)) return [x,y];}
+  for(let y=2;y<RH-2;y++) for(let x=2;x<RW-2;x++) if(ok(x,y)) return [x,y];
+  return [9,5];
 }
 function tileAt(r,px,py){
   const tx=Math.floor(px/T), ty=Math.floor(py/T);
   if(tx<0||ty<0||tx>=RW||ty>=RH) return 0;
   return r.tiles[ty*RW+tx];
 }
-const isSolid=v=>v===1||v===2||v===3||v===6;
+const isSolid=v=>v===1||v===2||v===3||v===6||v===7||v===8;
 function boxHits(r,x,y,hw,hh){
   return isSolid(tileAt(r,x-hw,y-hh))||isSolid(tileAt(r,x+hw,y-hh))||isSolid(tileAt(r,x-hw,y+hh))||isSolid(tileAt(r,x+hw,y+hh));
 }
@@ -193,6 +290,7 @@ function px(g,c,x,y,w,h){g.fillStyle=c;g.fillRect(x,y,w||1,h||1);}
 
 function paintRoom(r){
   const c=mk(W,H), g=c.getContext("2d"), rnd=mulberry(r.seed^0x5bd1);
+  const F=(ZONE[r.zone]||{floor:"#211f1b"}).floor, F1=tint(F,7), F2=tint(F,-6); // each zone has its own floor
   for(let ty=0;ty<RH;ty++)for(let tx=0;tx<RW;tx++){
     const v=r.tiles[ty*RW+tx], x=tx*T, y=ty*T;
     if(v===1){ // riveted iron plate
@@ -201,8 +299,8 @@ function paintRoom(r){
       px(g,"#3a3530",x+2,y+2); px(g,"#3a3530",x+T-3,y+2); px(g,"#3a3530",x+2,y+T-3); px(g,"#3a3530",x+T-3,y+T-3);
       if(rnd()<0.25) px(g,"#3a2418",x+3+Math.floor(rnd()*9),y+4+Math.floor(rnd()*8),2,1+Math.floor(rnd()*3));
     } else {
-      px(g,"#211f1b",x,y,T,T);
-      for(let k=0;k<7;k++) px(g,rnd()<0.5?"#282621":"#1b1916",x+Math.floor(rnd()*T),y+Math.floor(rnd()*T));
+      px(g,F,x,y,T,T);
+      for(let k=0;k<7;k++) px(g,rnd()<0.5?F1:F2,x+Math.floor(rnd()*T),y+Math.floor(rnd()*T));
       px(g,"#1c1a17",x+T-1,y,1,T); px(g,"#1c1a17",x,y+T-1,T,1);
       if(v===0&&rnd()<0.02){px(g,"#161513",x+2,y+2,12,12); for(let k=0;k<4;k++) px(g,"#0b0a09",x+3,y+4+k*3,10,1);} // floor grate
       if(v===4) for(let k=0;k<8;k++) px(g,["#9fb7bd","#cfe0e3","#6f8a90"][k%3],x+1+Math.floor(rnd()*14),y+1+Math.floor(rnd()*14));
@@ -210,13 +308,28 @@ function paintRoom(r){
     }
   }
   g.fillStyle="rgba(0,0,0,.35)"; g.fillRect(T,T,W-2*T,4); g.fillRect(T,T,4,H-2*T);
-  // a pipe running along the top wall, broken by the door
-  for(let x=T;x<W-T;x++){
+  // One pipe runs through the whole Works: along the top wall and out of the side doors at the same height,
+  // and across the floor beside the north and south doors, so it lines up with the next room's.
+  const x0=r.nb.w?0:T, x1=r.nb.e?W:W-T, bx=r.broken?r.brokenX:-99, PX=11*T+5;
+  for(let x=x0;x<x1;x++){
     if(r.nb.n&&x>=9*T-3&&x<11*T+3) continue;
+    if(x>=bx&&x<bx+10) continue;
     px(g,"#4a3f33",x,11,1,4); px(g,"#6b5a46",x,11,1,1); px(g,"#2e2720",x,14,1,1);
     if(x%32===0){px(g,"#2e2720",x-1,10,3,6);}
   }
-  if(rnd()<0.5){const vx=T*2+Math.floor(rnd()*(W-T*5)); if(!(r.nb.n&&vx>8*T&&vx<12*T)){px(g,"#7a2a1f",vx-3,8,7,1);px(g,"#7a2a1f",vx-3,14,7,1);px(g,"#7a2a1f",vx-4,9,1,5);px(g,"#7a2a1f",vx+3,9,1,5);px(g,"#9a3a2a",vx,9,1,5);}}
+  if(!r.nb.w) px(g,"#2e2720",T,10,2,6);
+  if(!r.nb.e) px(g,"#2e2720",W-T-2,10,2,6);
+  const riser=(y0,y1)=>{for(let y=y0;y<y1;y++){px(g,"#4a3f33",PX,y,4,1); px(g,"#6b5a46",PX,y,1,1); px(g,"#2e2720",PX+3,y,1,1); if(y%32===0) px(g,"#2e2720",PX-1,y,6,3);}};
+  if(r.nb.n) riser(0,11);
+  if(r.nb.s){riser(15,H); px(g,"#2e2720",PX-1,11,6,5);}
+  if(r.broken){ // torn, rusted ends, and sludge running down the wall into a pool
+    const b=r.brokenX;
+    px(g,"#7a3a1f",b-2,10,2,6); px(g,"#7a3a1f",b+10,10,2,6); px(g,"#4a2414",b,11,1,3); px(g,"#4a2414",b+9,12,1,3);
+    for(let k=0;k<3;k++) px(g,"#060508",b+1+k*3,13,2,3+Math.floor(rnd()*3));
+    g.fillStyle="#060508"; g.beginPath(); g.ellipse(b+5,T+5,10,3,0,0,7); g.fill(); px(g,"#1f2b2b",b+1,T+4,3,1);
+  }
+  if(r.kind!=="valve"&&rnd()<0.5){const vx=T*2+Math.floor(rnd()*(W-T*5)); if(!(r.nb.n&&vx>8*T&&vx<12*T)&&!(vx>bx-6&&vx<bx+16)){px(g,"#3a3530",vx-3,8,7,1);px(g,"#3a3530",vx-3,14,7,1);px(g,"#3a3530",vx-4,9,1,5);px(g,"#3a3530",vx+3,9,1,5);px(g,"#4a4540",vx,9,1,5);}} // a seized wheel: only the red ones turn
+  paintZone(g,r,rnd);
   // tar puddles, oil stains
   for(let k=0,n=1+Math.floor(rnd()*4);k<n;k++){
     const x=T*2+Math.floor(rnd()*(W-T*4)), y=T*2+Math.floor(rnd()*(H-T*4));
@@ -239,6 +352,7 @@ function paintRoom(r){
       px(g,red?"#2e1512":"#5a4632",x+2,y+5,12,1);px(g,red?"#2e1512":"#5a4632",x+2,y+10,12,1);px(g,"#0a0909",x+5,y+1,3,1);px(g,"#22201d",x+12,y+2,2,12);}
   }
   paintKind(g,r,rnd);
+  paintCrates(g,r); paintDecor(g,r,rnd);
   if(r.blood) for(let k=0;k<3;k++){const x=T+Math.floor(rnd()*(W-3*T)); px(g,"#3e1410",x,3+Math.floor(rnd()*6),2+Math.floor(rnd()*4),2); px(g,"#3e1410",x+1,6,1,4+Math.floor(rnd()*8));}
   if(r.blood&&rnd()<0.6){const x=T*3+Math.floor(rnd()*(W-T*6)), y=T*3+Math.floor(rnd()*(H-T*6)); if(!isSolid(tileAt(r,x,y))){for(let k=0;k<9;k++) px(g,"#3e1410",x+k*3+Math.floor(rnd()*2),y+Math.floor(rnd()*3)-k,2,2);}}
   if(r.scrawl){const w=textW(r.scrawl,1), x=Math.max(T+2,Math.min(W-T-2-w,T*2+Math.floor(rnd()*(W-T*4-w)))), y=r.kind==="lockers"?T*2+6:T+4+Math.floor(rnd()*4); text(g,r.scrawl,x,y,1,"#5a1a14");}
@@ -317,6 +431,101 @@ function paintKind(g,r,rnd){
       if(i===0){px(g,"#2a1d16",x+2,y+h,3,4); px(g,"#2a1d16",x+2,y+h+3,5,2);} // a boot. someone is still in there
     }
     for(let i=0;i<40;i++) px(g,"#4a463c",T*2+Math.floor(rnd()*(W-T*4)),T*2+Math.floor(rnd()*(H-T*4)));
+  }
+  if(k==="office"){
+    for(const [dx,dy] of [[3,3],[15,3],[3,8],[15,8]]){const x=dx*T, y=dy*T;
+      px(g,"#0d0c0b",x,y+13,32,3); px(g,"#3b2b1b",x,y+1,32,12); px(g,"#4f3a25",x,y+1,32,2); px(g,"#2c2014",x+2,y+12,2,4); px(g,"#2c2014",x+28,y+12,2,4);
+      const pp=x+3+Math.floor(rnd()*8); px(g,"#d9cfb8",pp,y+4,8,6); px(g,"#b9b09a",pp+1,y+6,5,1); px(g,"#b9b09a",pp+1,y+8,4,1); // papers
+      if(rnd()<0.5){px(g,"#1c1a17",x+18,y-1,11,8); px(g,"#2a2622",x+19,y,9,3); px(g,"#d9cfb8",x+20,y-4,7,4);} // a typewriter, a page still in it
+      if(rnd()<0.4) px(g,"#3e1410",x+13,y+5,4,3);
+    }
+    for(const fx of [2*T,5*T,13*T+8,16*T+4]){px(g,"#2e3a36",fx,2,11,13); px(g,"#3e4c47",fx,2,11,1); px(g,"#1c2422",fx+2,6,7,1); px(g,"#1c2422",fx+2,10,7,1); px(g,"#6a6a60",fx+5,4,1,1); px(g,"#6a6a60",fx+5,8,1,1);} // filing cabinets
+  }
+  if(k==="infirmary"){
+    for(const cy of [2,8]) for(const cx of [2,5,14,17]){const x=cx*T, y=cy*T;
+      px(g,"#0d0c0b",x+1,y+30,14,3); px(g,"#4a4a44",x+1,y+1,14,30); px(g,"#7a7a70",x+2,y+2,12,28); px(g,"#cfc6b0",x+3,y+3,10,6); // frame, mattress, pillow
+      if(rnd()<0.6){px(g,"#a8a090",x+2,y+12,12,17); if(rnd()<0.6){g.fillStyle="#4a1612"; g.beginPath(); g.ellipse(x+8,y+18+rnd()*6,3+rnd()*2,3+rnd()*3,0,0,7); g.fill();}} // a sheet, and what soaked through it
+    }
+    const mx=7*T-6; px(g,"#2a2622",mx,2,20,12); px(g,"#cfc6b0",mx+1,3,18,10); px(g,"#8a2a22",mx+8,4,4,8); px(g,"#8a2a22",mx+5,6,10,4); // the medicine cabinet
+  }
+  if(k==="terminal"){
+    const x=4*T, y=2*T;
+    px(g,"#0d0c0b",x,y+13,32,3); px(g,"#3b2b1b",x,y+3,32,11); px(g,"#4f3a25",x,y+3,32,2); // the desk
+    px(g,"#2a2622",x+6,y-10,20,14); px(g,"#3a3530",x+6,y-10,20,1); px(g,"#0a0d0a",x+8,y-8,16,10); // the set; its screen is drawn live
+    px(g,"#1c1a17",x+2,y+5,10,4); px(g,"#3a3530",x+3,y+6,8,2); px(g,"#0a0908",x+5,y+6,4,1); // the tape deck, empty
+    for(let i=0;i<7;i++) px(g,"#1c1a17",x+26+i*2,y-3-i*2,2,1); // its cable, up into the wall
+  }
+  if(k==="storage"){ // racks along the top wall
+    for(let sx=2*T;sx<W-3*T;sx+=44){ if(r.nb.n&&sx+36>8*T&&sx<12*T) continue;
+      px(g,"#2a2622",sx,1,36,14); for(const sy of [6,13]) px(g,"#4a3f33",sx,sy,36,2); px(g,"#1c1a17",sx,1,2,14); px(g,"#1c1a17",sx+34,1,2,14);
+      for(let i=0;i<4;i++){ if(rnd()<0.7) px(g,["#3d2f22","#4a3a2a","#5a4632"][i%3],sx+3+i*8,rnd()<0.5?2:9,6,4); }
+    }
+  }
+  if(k==="valve"){ // a stem from each wheel down to the pipe, and a warning plate
+    for(const v of r.valves){px(g,"#2e2720",v.x-1,6,3,6); px(g,"#5a1f17",v.x-3,10,7,1);}
+    px(g,"#2a2622",12*T+2,2,26,8); text(g,"SEAL",12*T+15,3,1,"#9a3a2a","c");
+  }
+  if(k==="drill"){
+    const h=r.hole, x=13*T, y=7*T;
+    px(g,"#3a3530",x-3,y-3,70,54); px(g,"#2a2622",x-1,y-1,66,50);
+    for(let i=0;i<8;i++){px(g,"#5a4f45",x+i*9,y-2,2,1); px(g,"#5a4f45",x+i*9,y+49,2,1);}
+    g.fillStyle="#010101"; g.beginPath(); g.ellipse(h.x,h.y,30,22,0,0,7); g.fill();
+    g.fillStyle="#0b0a09"; g.beginPath(); g.ellipse(h.x,h.y-2,30,20,0,Math.PI,0); g.fill();
+    g.fillStyle="#010101"; g.beginPath(); g.ellipse(h.x,h.y+2,24,16,0,0,7); g.fill();
+    for(let cy=T+4;cy<h.y;cy+=3) px(g,"#5a4f45",h.x-1,cy,2,2); // the drill chain, still running down into it
+    px(g,"#2a2622",h.x-18,1,36,10); px(g,"#4a3f33",h.x-18,1,36,1); text(g,"900 FT",h.x,3,1,"#c9a04a","c");
+    for(let i=0;i<5;i++) px(g,i%2?"#141210":"#6a5a1a",x+i*13,y-6,13,2); // hazard paint round the rim
+  }
+  if(k==="rats"){
+    for(let i=0;i<6;i++){const x=T*2+Math.floor(rnd()*(W-T*4)), y=T*2+Math.floor(rnd()*(H-T*4)); if(isSolid(tileAt(r,x,y))) continue;
+      g.fillStyle="#2e2618"; g.beginPath(); g.ellipse(x,y,8+rnd()*6,4+rnd()*2,0,0,7); g.fill(); // nests of straw and rag
+      for(let j=0;j<10;j++) px(g,rnd()<0.5?"#6a5a3a":"#4a3f2a",x-8+Math.floor(rnd()*16),y-3+Math.floor(rnd()*6),2+Math.floor(rnd()*2),1);}
+    for(let i=0;i<30;i++) px(g,"#0b0a09",T*2+Math.floor(rnd()*(W-T*4)),T*2+Math.floor(rnd()*(H-T*4)));
+    for(const hx of [3*T,7*T,13*T,17*T]) px(g,"#030303",hx,H-T,6,3); // gnawed holes in the wall
+    for(const hy of [3*T,8*T]){px(g,"#030303",T,hy,3,6); px(g,"#030303",W-T-3,hy,3,6);}
+  }
+}
+// small things each zone has on its walls and floors
+function paintZone(g,r,rnd){
+  const z=r.zone, door=x=>r.nb.n&&x>8*T&&x<12*T;
+  const spots=[]; for(let k=0;k<3;k++){const x=T*2+Math.floor(rnd()*(W-T*5)); if(!door(x)&&!door(x+28)) spots.push(x);}
+  if(r.kind==="storage"||r.kind==="valve"||r.kind==="drill"||r.kind==="office"||r.kind==="lockers") spots.length=0; // those walls are full
+  if(z==="storage") for(const x of spots.slice(0,1)) text(g,"BAY "+(r.id%9+1),x,3,1,"#3a3530");
+  if(z==="barracks") for(const x of spots){px(g,"#5a4f45",x+2,2,1,2); px(g,"#2a2420",x,4,5,7); px(g,"#1f1a17",x+2,4,1,7);} // coats on hooks
+  if(z==="offices") for(const x of spots.slice(0,1)){px(g,"#3b2b1b",x,1,22,9); for(let i=0;i<4;i++) px(g,"#cfc6a8",x+2+i*5,2+(i%2),4,5);} // a notice board
+  if(z==="pump") for(const x of spots){px(g,"#2e2720",x+3,8,2,3); g.fillStyle="#cfc6b0"; g.beginPath(); g.arc(x+4,5,4,0,7); g.fill(); px(g,"#9a3a2a",x+4,3,1,3);} // pressure gauges
+  if(z==="boiler"){ for(const x of spots) px(g,"#0b0a09",x,1,4+Math.floor(rnd()*6),10); // soot
+    for(let i=0;i<2;i++){const x=T*2+Math.floor(rnd()*(W-T*4)), y=T*2+Math.floor(rnd()*(H-T*4)); if(!isSolid(tileAt(r,x,y))){g.fillStyle="#0b0a09"; g.beginPath(); g.ellipse(x,y,6,3,0,0,7); g.fill(); px(g,"#2a2622",x-2,y-1,2,1);}}} // spilt coal
+  if(z==="sump"){ px(g,"#1f2b2b",T,8,W-2*T,1); for(let i=0;i<4;i++){const x=T*2+Math.floor(rnd()*(W-T*4)), y=T*2+Math.floor(rnd()*(H-T*4)); if(!isSolid(tileAt(r,x,y))){g.fillStyle="#0c1414"; g.beginPath(); g.ellipse(x,y,7,3,0,0,7); g.fill();}}} // the water line, and puddles
+  if(z==="drill") for(const x of spots){for(let y=1;y<11;y+=2) px(g,"#3a3530",x,y,2,1); px(g,"#4a3f33",x-1,10,4,2);} // hanging chains
+}
+function paintCrates(g,r){
+  for(const c of r.crates){const x=c.tx*T, y=c.ty*T;
+    px(g,"#0d0c0b",x+1,y+13,14,3);
+    if(!c.open){
+      px(g,"#5a4228",x+1,y+1,14,12); px(g,"#6e5232",x+1,y+1,14,2); px(g,"#3e2c18",x+1,y+5,14,1); px(g,"#3e2c18",x+1,y+9,14,1);
+      px(g,"#3e2c18",x+1,y+1,1,12); px(g,"#3e2c18",x+14,y+1,1,12); for(let i=0;i<10;i++) px(g,"#4a361e",x+3+i,y+2+i);
+      px(g,"#8a7a5a",x+5,y+6,2,2);
+    } else {
+      px(g,"#5a4228",x+1,y+4,14,9); px(g,"#120d08",x+2,y+5,12,5); px(g,"#6e5232",x+1,y+4,14,1);
+      px(g,"#6e5232",x+3,y-1,12,3); px(g,"#3e2c18",x+3,y+1,12,1); // the lid, pushed back
+    }
+  }
+}
+function paintDecor(g,r,rnd){
+  for(const d of r.decor){const x=d.x, y=d.y, s=d.f?-1:1, P=(dx,dy,w,h,c)=>px(g,c,s>0?x+dx:x-dx-w,y+dy,w,h);
+    if(d.k==="corpse"){ // a worker face-down in overalls, dragged here
+      g.fillStyle="#2a0c0a"; g.beginPath(); g.ellipse(x,y+1,12,5,0,0,7); g.fill();
+      for(let k=0;k<5;k++) P(-14-k*5,Math.floor(rnd()*3)-1,3,2,"#3e1410");
+      P(-3,-3,9,6,"#2a3238"); P(-3,-1,9,1,"#3a444a"); P(-10,-2,7,2,"#232a2f"); P(-10,1,7,2,"#232a2f"); P(-12,-2,2,2,"#141210"); P(-12,1,2,2,"#141210");
+      P(6,-2,4,4,"#6e5a46"); P(9,-2,1,4,"#2a1d16"); P(1,3,2,3,"#6e5a46");
+    }
+    if(d.k==="skel"){
+      P(6,-2,4,4,"#cfc6b0"); P(7,-1,1,1,"#0b0a09"); P(7,1,1,1,"#0b0a09"); P(-3,0,9,1,"#a89f88");
+      for(let i=0;i<4;i++) P(-1+i*2,-2,1,5,"#cfc6b0");
+      P(-6,-1,3,3,"#a89f88"); P(-12,-2,6,1,"#cfc6b0"); P(-12,2,6,1,"#cfc6b0"); P(1,4,5,1,"#cfc6b0"); P(-9,5,2,1,"#a89f88");
+    }
+    if(d.k==="moth"){px(g,"#5c564c",x-3,y,3,2); px(g,"#5c564c",x+1,y,3,2); px(g,"#3b352c",x,y-1,1,3);} // wings flat, dead
   }
 }
 function roomCanvas(r){return r.canvas||(r.canvas=paintRoom(r));}
@@ -651,6 +860,9 @@ const sfx={
   sting(){tone({type:"sawtooth",f0:58,f1:52,dur:1.4,gain:0.12,lp:300,attack:0.01});tone({type:"sine",f0:1244,f1:1180,dur:0.9,gain:0.03,attack:0.2});},
   slam(){nz({dur:0.5,freq:180,type:"lowpass",gain:0.4,attack:0.002});tone({f0:90,f1:40,dur:0.4,gain:0.3});},
   clank(){nz({dur:0.25,freq:1400,q:5,gain:0.18});tone({type:"square",f0:110,f1:90,dur:0.3,gain:0.06,lp:600});},
+  squeal(x){tone({type:"square",f0:2400,f1:3100,dur:0.09,gain:0.025,pan:panOf(x)}); tone({type:"square",f0:2900,f1:2200,dur:0.12,gain:0.025,pan:panOf(x),delay:0.11});},
+  valve(x){tone({type:"sawtooth",f0:420,f1:370,dur:0.45,gain:0.05,lp:1800,pan:panOf(x)}); nz({dur:0.4,freq:2600,q:6,gain:0.04,pan:panOf(x)});},
+  crate(x){nz({dur:0.25,freq:420,q:2,gain:0.12,pan:panOf(x)}); tone({type:"triangle",f0:180,f1:120,dur:0.2,gain:0.05});},
   rattle(x){for(let i=0;i<6;i++) setTimeout(()=>nz({dur:0.04,freq:800+Math.random()*600,q:4,gain:0.12,pan:panOf(x)}),i*55);},
   win(){[262,330,392,523].forEach((f,i)=>tone({type:"triangle",f0:f,dur:1.4,gain:0.07,delay:i*0.18,attack:0.05}));}
 };
@@ -782,11 +994,11 @@ function newGame(){
     smudge:{follow:false,x:0,y:0}, officeLit:false, save:loadSave(),
     ev, lan:LANTERNS[0], crank:false, fuses:0, exitSeq:null, liftT:0, liftReady:false, liftClank:0,
     other:null, figure:null, echo:0, doorShut:null, wrongFace:0, hallT:60+Math.random()*40, blackShift:false, secret:false, enteredFrom:null,
-    motes:[], drops:[], steam:[], waterT:0, lockerT:0,
+    motes:[], drops:[], steam:[], waterT:0, lockerT:0, critters:[], sealed:{}, turn:null, hissT:0,
   };
   const lid=G.save.lantern; G.lan=LANTERNS.find(l=>l.id===lid&&l.has(Object.assign({endings:{}},G.save)))||LANTERNS[0];
   G.save.met=G.save.met||{}; G.save.endings=G.save.endings||{}; G.save.notes=G.save.notes||[];
-  G.room.visited=true;
+  G.room.visited=true; G.toasts["z_"+G.room.zone]=1;
   G.distCur=bfs(rooms,G.room);
 }
 
@@ -1273,6 +1485,7 @@ function update(dt){
   if(keys.has("KeyW")||keys.has("ArrowUp")) my-=1;
   if(keys.has("KeyS")||keys.has("ArrowDown")) my+=1;
   const run=keys.has("ShiftLeft")||keys.has("ShiftRight");
+  if(G.turn&&(mx||my)){G.turn=null; tell("YOU LET GO OF THE WHEEL.");}
   if(G.sit||G.exitSeq||G.cam){mx=0;my=0;} // a raised camera holds Ash still
   p.moving=!!(mx||my);
   if(p.moving){
@@ -1292,6 +1505,7 @@ function update(dt){
     }
   }
 
+  updTurn(dt);
   // leaving the room through a door
   let dir=null;
   if(p.x<2&&G.room.nb.w) dir="w"; else if(p.x>W-2&&G.room.nb.e) dir="e";
@@ -1408,6 +1622,72 @@ function enterRoom(dir){
     G.other={x:ox,y:oy,hist:[],state:"copy",lit:0,t:0,dark:0,dir:"d"}; G.echo=Math.max(G.echo,4);
   }
   if(to.kind==="lockers") G.lockerT=2+Math.random()*6;
+  G.critters=spawnCritters(to); G.turn=null; G.steam=[]; G.drops=[]; // steam and drips stay in the room they came from
+  if(!G.toasts["z_"+to.zone]){G.toasts["z_"+to.zone]=1; tell(ZONE[to.zone].name);}
+  else if(to.glitch&&G.blueprint) toast("glitch","THE MAP WON'T HOLD STILL IN HERE.");
+}
+// Rats and baby tarlings: harmless, and they run from Ash. Rats squeal as they go, and that carries.
+function spawnCritters(r){
+  const out=[]; if(r===G.map.start||r.special) return out;
+  const add=k=>{const [x,y]=freeSpot(r,Math.random); out.push({k,x:x*T+8,y:y*T+10,run:false,wT:0,vx:0,vy:0,dir:1,stuck:0});};
+  for(let i=0,n=r.kind==="rats"?5:Math.random()<0.18?1:0;i<n;i++) add("rat");
+  if((r.zone==="sump"||r.zone==="drill")&&Math.random()<0.25) for(let i=0,n=Math.random()<0.4?2:1;i<n;i++) add("baby");
+  return out;
+}
+function updCritters(dt){
+  const p=G.p;
+  G.critters=G.critters.filter(c=>{
+    const d=dist(c.x,c.y,p.x,p.y);
+    if(d<34&&!c.run){c.run=true;
+      if(c.k==="rat"){sfx.squeal(c.x); noise(c.x,c.y,0.45); toast("rats","RATS. THEIR SQUEALING CARRIES.");}
+      else toast("baby","A LITTLE ONE. IT'S MORE AFRAID OF YOU.");}
+    let vx=c.vx, vy=c.vy, sp=c.k==="rat"?14:8;
+    if(c.run){vx=(c.x-p.x)/(d||1); vy=(c.y-p.y)/(d||1); sp=c.k==="rat"?72:40;}
+    else{c.wT-=dt; if(c.wT<=0){c.wT=0.6+Math.random()*1.6; const a=Math.random()*6.28; c.vx=Math.random()<0.4?0:Math.cos(a); c.vy=c.vx?Math.sin(a):0;}}
+    if(vx||vy){ if(vx) c.dir=vx<0?-1:1;
+      if(moveBox(G.room,c,vx*sp*dt,vy*sp*dt,2,1)&&c.run&&(c.stuck+=dt)>0.25) return false; } // into a crack in the wall
+    return c.x>T&&c.x<W-T&&c.y>T&&c.y<H-T+4;
+  });
+}
+function drawCritter(c,t){
+  const x=Math.round(c.x), y=Math.round(c.y), s=c.dir, f=Math.floor(t*(c.run?16:6))%2;
+  if(c.k==="baby"){ if(EA) EA.tarlingBaby(ctx,x,y,Math.floor(t*(c.run?14:5))); return; }
+  px(ctx,"rgba(0,0,0,.35)",x-3,y,7,1); px(ctx,"#4a443c",x-3,y-3,6,3); px(ctx,"#5a5248",x-2,y-4,4,1);
+  px(ctx,"#4a443c",s>0?x+3:x-5,y-3,2,2); px(ctx,"#c4473a",s>0?x+4:x-5,y-3);
+  px(ctx,"#8a6a5a",s>0?x-6:x+3,y-2+f,3,1); px(ctx,"#2e2a24",x-2,y,1,1+f); px(ctx,"#2e2a24",x+1,y,1,2-f);
+}
+// Crates: open one to see what is in it. Valve wheels: hold still while one turns; it is loud.
+function openCrate(r,c){
+  if(!c.open){c.open=true; r.canvas=null; sfx.crate(c.x); noise(c.x,c.y,0.2); if(!c.item){tell("EMPTY."); return;}}
+  if(c.item==="oil"&&G.flasks>=3){tell("YOU CAN ONLY CARRY 3 FLASKS."); return;}
+  const k=c.item; c.item=null; sfx.pickup(); pickUp(k);
+}
+function startTurn(r,v){ if(G.turn) return; G.turn={r,v,t:0,dur:G.wrench?1.5:3,nT:0}; toast("valve","HOLD STILL TO TURN THE WHEEL. IT SCREAMS."); }
+function updTurn(dt){
+  const q=G.turn; if(!q) return;
+  q.t+=dt; q.nT-=dt;
+  if(q.nT<=0){q.nT=0.5; sfx.valve(q.v.x); noise(q.v.x,T+10,0.55);}
+  if(q.t<q.dur) return;
+  q.v.shut=true; q.v.a+=q.dur*4; G.turn=null; sfx.clank();
+  const r=q.r, n=r.valves.filter(v=>v.shut).length;
+  if(n===3){G.sealed[r.zone]=true; sfx.thud(); tell("ALL THREE SHUT. THE BROKEN PIPES GO QUIET.");}
+  else tell(n+" OF 3 WHEELS SHUT.");
+}
+function useTerminal(){ sfx.click(); tell("THE SCREEN IS ALL STATIC. THE TAPE DECK IS EMPTY."); }
+function lookHole(){ tell("900 FEET DOWN. SOMETHING DOWN THERE BREATHES."); }
+function drawRoomProps(r,t){
+  if(r.valves) for(const v of r.valves){ // the wheels turn while you turn them
+    const a=v.a+(G.turn&&G.turn.v===v?G.turn.t*4:0), cx=v.x, cy=6, c=v.shut?"#5a1f17":"#9a3a2a";
+    for(let k=0;k<14;k++){const aa=k/14*6.283; px(ctx,c,Math.round(cx+Math.cos(aa)*5)-1,Math.round(cy+Math.sin(aa)*5)-1,2,2);}
+    for(let k=0;k<3;k++){const aa=a+k/3*2.094; for(let d=-4;d<=4;d++) px(ctx,v.shut?"#3e1410":"#7a2a1f",Math.round(cx+Math.cos(aa)*d),Math.round(cy+Math.sin(aa)*d));}
+    px(ctx,v.shut?"#7a2a22":"#c4473a",cx-1,cy-1,2,2);
+    if(v.shut){px(ctx,"#cfc6b0",cx+7,cy+1); px(ctx,"#cfc6b0",cx+8,cy+2); px(ctx,"#cfc6b0",cx+9,cy+1); px(ctx,"#cfc6b0",cx+10,cy); px(ctx,"#cfc6b0",cx+11,cy-1);} // chalked off
+  }
+  for(const c of r.crates) if(c.open&&c.item) drawIcon(ctx,c.item==="oil"?"flask":c.item,c.x-4,c.y-4,8);
+  for(const d of r.decor) if(d.k==="corpse") for(let i=0;i<7;i++){ // flies
+    const a=t*(2.5+i*0.6)+i*1.7, rr=4+(i*5)%8;
+    px(ctx,(i+Math.floor(t*9))%4?"#4a463c":"#8f8778",Math.round(d.x+Math.cos(a)*rr),Math.round(d.y-5+Math.sin(a*1.3)*rr*0.5));
+  }
 }
 function openShutDoor(){
   const d=G.doorShut; if(!d) return;
@@ -1455,7 +1735,14 @@ function updWorld(dt){
   if((r.kind==="flooded"||r.kind==="pump"||r.kind==="boiler")&&Math.random()<dt*1.2) G.drops.push({x:T+Math.random()*(W-2*T),y:T,v:0,life:1.4,tgt:T*2+Math.random()*(H-T*4)});
   G.drops=G.drops.filter(d=>{d.life-=dt; if(d.bubble){d.y+=d.v*dt; return d.life>0;} d.v+=160*dt; d.y+=d.v*dt; if(d.y>=d.tgt){if(Math.random()<0.3) nz({dur:0.03,freq:3200,q:8,gain:0.03,pan:panOf(d.x)}); return false;} return d.life>0;});
   if(r.kind==="boiler"&&Math.random()<dt*2) G.steam.push({x:2*T+50+Math.random()*6,y:T*2-4,life:1.6});
-  G.steam=G.steam.filter(s=>(s.life-=dt)>0&&(s.y-=10*dt,s.x+=Math.sin(s.life*4)*0.3,true));
+  G.steam=G.steam.filter(s=>(s.life-=dt)>0&&(s.y+=(s.vy||-10)*dt,s.x+=(s.vx||0)*dt+Math.sin(s.life*4)*0.3,true));
+  if(r.broken&&!G.sealed[r.zone]){ // a broken pipe hisses and spits until its zone's wheels are shut
+    if(Math.random()<dt*14) G.steam.push({x:r.brokenX+2+Math.random()*6,y:14,life:1.6,w:3,vx:(Math.random()-0.5)*16,vy:12+Math.random()*16});
+    if(Math.random()<dt*1.5) G.drops.push({x:r.brokenX+3+Math.random()*4,y:15,v:0,life:1.4,tgt:T+5+Math.random()*4});
+    G.hissT-=dt; if(G.hissT<=0){G.hissT=1.4+Math.random(); nz({dur:1.2,freq:6000,q:0.6,gain:0.025,pan:panOf(r.brokenX),attack:0.1});}
+  }
+  if(r.hole&&Math.random()<dt*2.5) G.drops.push({x:r.hole.x+(Math.random()-0.5)*36,y:r.hole.y+(Math.random()-0.5)*32,v:-5,life:0.5,bubble:true});
+  updCritters(dt);
   if(r.kind==="lockers"&&G.lockerT>0){G.lockerT-=dt; if(G.lockerT<=0){sfx.rattle(40+Math.random()*240); G.shake=1.5;}}
   // a shut door opens again
   if(G.doorShut){G.doorShut.t-=dt; if(G.doorShut.t<=0){openShutDoor(); sfx.clank();}}
@@ -1540,6 +1827,10 @@ function interactables(){
   if(r.special==="smudge"&&!G.smudge.follow) out.push({x:OBJ.x,y:OBJ.y+4,fn:talkSmudge});
   if(G.smudge.follow) out.push({x:G.smudge.x,y:G.smudge.y,fn:talkSmudge,low:true});
   if(r.note) out.push({x:r.note.x,y:r.note.y,fn:()=>readNote(r)});
+  for(const c of r.crates) if(!c.open||c.item) out.push({x:c.x,y:c.y+6,fn:()=>openCrate(r,c)});
+  if(r.valves&&!G.turn) for(const v of r.valves) if(!v.shut) out.push({x:v.x,y:T+10,fn:()=>startTurn(r,v)});
+  if(r.term) out.push({x:r.term.x,y:3*T+6,fn:useTerminal});
+  if(r.hole) out.push({x:r.hole.x,y:7*T-4,fn:lookHole});
   return out;
 }
 function nearestThing(){
@@ -1709,6 +2000,7 @@ function renderGame(){
   if(rm.special==="smudge"&&!G.smudge.follow) drawSmudge(ctx,OBJ.x,OBJ.y+4,t);
   for(const l of rm.lamps){px(ctx,"#2a2622",l.x-3,l.y-6,6,2); px(ctx,"#3a3530",l.x-2,l.y-4,4,6); px(ctx,l.dead?"#141210":(Math.sin(t*7+l.ph)>0.93?"#8a6a2a":"#f2c35a"),l.x-1,l.y-3,2,4);}
   if(rm.kind==="boiler") px(ctx,Math.sin(t*9)>0?"#c4561e":"#a8401a",2*T+26,2*T+11,12,8);
+  drawRoomProps(rm,t);
   if(G.flare&&G.flare.room===G.room) drawFlare(G.flare);
   if(rm.item&&FLOOR_ICONS.includes(rm.item.kind)) floorItem(ctx,rm.item);
   else if(rm.item){const it=rm.item; if(it.kind==="crank"){px(ctx,"#5a4f45",it.x-4,it.y-1,8,2); px(ctx,"#5a4f45",it.x+3,it.y-5,2,5); px(ctx,"#2a2622",it.x-5,it.y-2,2,4);} else {px(ctx,"#2a2622",it.x-2,it.y-4,4,7); px(ctx,"#c9a04a",it.x-2,it.y-4,4,1); px(ctx,"#c9a04a",it.x-2,it.y+2,4,1); px(ctx,"#e8e4dc",it.x-1,it.y-2,2,3);}}
@@ -1716,7 +2008,7 @@ function renderGame(){
   if(rm.exitT==="drain"&&Math.sin(t*2)>0) px(ctx,"#22383c",rm.hatch.x-10+Math.floor((t*9)%20),rm.hatch.y-2,4,1);
   if(G.doorShut&&G.doorShut.room===rm){const d=G.doorShut.dir, D=DOOR[d], hor=d==="n"||d==="s"; for(let k=0;k<6;k++) hor?px(ctx,"#3a3530",D.x-16+k*6,d==="n"?0:H-T,3,T):px(ctx,"#3a3530",d==="w"?0:W-T,D.y-16+k*6,T,3);}
   for(const m of G.motes) px(ctx,"rgba(217,207,184,.22)",Math.round(m.x),Math.round(m.y));
-  for(const s2 of G.steam) px(ctx,"rgba(140,135,125,"+(s2.life/1.6*0.5)+")",Math.round(s2.x),Math.round(s2.y),2,2);
+  for(const s2 of G.steam) px(ctx,"rgba(150,145,135,"+(s2.life/1.6*0.5)+")",Math.round(s2.x),Math.round(s2.y),s2.w||2,s2.w||2);
   if(rm.note){const n=rm.note; px(ctx,"#cfc6a8",n.x-3,n.y-2,6,5); px(ctx,"#8a8170",n.x-2,n.y-1,4,1); px(ctx,"#8a8170",n.x-2,n.y+1,3,1);}
   for(const c of rm.scrip){px(ctx,"#8a6a2a",c.x-1,c.y-1,3,3); px(ctx,"#c9a04a",c.x-1,c.y-1,2,2); px(ctx,"#f0d080",c.x-1,c.y-1);}
   // floor items
@@ -1729,6 +2021,7 @@ function renderGame(){
   if(G.lis.inRoom&&!G.lis.gone) actors.push({y:G.lis.y,d:()=>drawListener(ctx,G.lis.x,G.lis.y,t,G.lis.state==="hunt"&&!G.lis.calm)});
   if(G.smudge.follow) actors.push({y:G.smudge.y,d:()=>drawSmudge(ctx,G.smudge.x,G.smudge.y,t)});
   if(G.other) actors.push({y:G.other.y,d:()=>drawOther(ctx,G.other,t)});
+  for(const c of G.critters) actors.push({y:c.y,d:()=>drawCritter(c,t)});
   actors.sort((a,b)=>a.y-b.y).forEach(a=>a.d());
   if(G.moth.inRoom&&!G.moth.gone) drawMoth(ctx,G.moth.x,G.moth.y,G.moth.calm?t*0.25:t);
 
@@ -1783,6 +2076,8 @@ function renderGame(){
     const a=0.35+Math.sin(t*2)*0.15;
     ctx.fillStyle="rgba(246,231,166,"+a+")"; ctx.fillRect(Math.round(G.moth.x)-1,Math.round(G.moth.y)-6,1,1); ctx.fillRect(Math.round(G.moth.x)+1,Math.round(G.moth.y)-6,1,1);
   }
+  // a terminal screen glows through the dark
+  if(rm.term){const s=rm.term; px(ctx,"#0e2a16",s.x-8,s.y-12,16,10); for(let i=0;i<10;i++) px(ctx,fxRnd()<0.5?"#2e6a3a":"#4a9a5a",s.x-8+Math.floor(fxRnd()*15),s.y-12+Math.floor(fxRnd()*10)); if(Math.sin(t*5)>0) px(ctx,"#8fd09a",s.x-6,s.y-5,3,1);}
   // the Black Shift: tar comes in from every wall
   if(G.blackShift){
     const e=shiftEdge();
@@ -1801,7 +2096,8 @@ function renderGame(){
 
   ctx.setTransform(1,0,0,1,0,0);
   drawHud();
-  if(!G.dlg&&!G.dying&&!G.sit&&hintsOn()){const it=nearestThing(); if(it&&!it.low) text(ctx,K("use"),Math.round(p.x),Math.round(p.y)-36,1,INK,"c","#000");}
+  if(G.turn){const k=G.turn.t/G.turn.dur; px(ctx,"#1c1a17",Math.round(p.x)-10,Math.round(p.y)-36,20,3); px(ctx,BLOOD,Math.round(p.x)-10,Math.round(p.y)-36,Math.round(20*k),3);}
+  if(!G.dlg&&!G.dying&&!G.sit&&!G.turn&&hintsOn()){const it=nearestThing(); if(it&&!it.low) text(ctx,K("use"),Math.round(p.x),Math.round(p.y)-36,1,INK,"c","#000");}
   if(G.sit) text(ctx,"SIT STILL  "+Math.ceil(G.sit.t),W/2,24,1,INK,"c","#000");
   if(G.exitSeq) text(ctx,(G.exitSeq.type==="chimney"?"CLIMB  ":"HOLD YOUR BREATH  ")+Math.ceil(G.exitSeq.dur-G.exitSeq.t),W/2,24,1,INK,"c","#000");
   if(G.liftT>0) text(ctx,"THE CAGE  "+Math.ceil(G.liftT),W/2,24,1,FLAME,"c","#000");
@@ -1846,9 +2142,11 @@ function drawPanels(){
   const cw=slim?3:clamp(Math.floor((PW-10)/9),4,9), ch=slim?2:Math.max(3,Math.round(cw*0.66));
   const top=touchMode()?32:0; // room for the touch Pause button above the map
   const mx0=Math.round(c-(9*cw)/2), my0=(slim?6:16)+top;
-  if(!slim) text(plc,"MAP",c,5+top,1,INK3,"c");
+  if(!slim) text(plc,ZONE[G.room.zone].tag,c,5+top,1,INK3,"c");
   px(plc,"rgba(0,0,0,.55)",mx0-2,my0-2,9*cw+3,7*ch+3);
-  if(G.blueprint){ // no map at all until the blueprint is found
+  if(G.blueprint&&G.room.glitch){ // some rooms scramble it
+    for(let i=0;i<70;i++) px(plc,["#2e2b26","#6f685c","#141210"][i%3],mx0+Math.floor(fxRnd()*9*cw),my0+Math.floor(fxRnd()*7*ch),Math.max(1,cw-1),1);
+  } else if(G.blueprint){ // no map at all until the blueprint is found
   for(const r of G.rooms){
     const dx=r.x-G.room.x+4, dy=r.y-G.room.y+3;
     if(dx<0||dy<0||dx>8||dy>6) continue;
@@ -1856,7 +2154,7 @@ function drawPanels(){
     if(!known) continue;
     const x=mx0+dx*cw, y=my0+dy*ch, mw=Math.max(1,cw-1), mh=Math.max(1,ch-1), mc=Math.floor(cw/2), mr=Math.floor(ch/2);
     if(r===G.room) px(plc,"#e8d6a8",x,y,mw,mh);
-    else if(r.visited) px(plc,"#6f685c",x,y,mw,mh);
+    else if(r.visited) px(plc,ZONE[r.zone].mc,x,y,mw,mh);
     else px(plc,"#2e2b26",x,y,mw,mh);
     if(r.hatch&&(r.exitSeen||G.helped==="lis")) px(plc,"#8fb4c4",x+mc-(slim?1:0),y+mr-(slim?1:0),1,1);
     if(r.special&&r.visited&&r!==G.room) px(plc,r.special==="shop"?"#e8a94a":"#d9cfb8",x+mc-(slim?1:0),y+mr-(slim?1:0),1,1);
@@ -2103,6 +2401,8 @@ function pickUp(kind){
   if(kind==="film"){G.film+=2; tell("TWO ROLLS OF FILM. "+K("reload")+" LOADS THEM.");}
   if(kind==="flare"){G.flares++; tell("A FLARE. THROW IT. THE MOTH WILL CHASE IT.");}
   if(kind==="wrench"){G.wrench=true; tell("A WRENCH. VALVE WHEELS WILL TURN FASTER.");}
+  if(kind==="oil"){G.flasks++; tell("AN OIL FLASK.");}
+  if(kind==="scrip"){G.scrip+=2; sfx.coin(); tell("TWO BRASS SCRIP.");}
 }
 // What each thing is, how many you have, and what using it does (a message means it couldn't be used).
 const ITEMS={
@@ -2504,7 +2804,7 @@ requestAnimationFrame(loop);
 
 /* ================= self-check (run LastLight.selfTest() in the console) ================= */
 if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
-  get state(){return G;}, get mode(){return mode;}, key:k=>dialogKey(k), talk:k=>({wick:talkWick,gauge:talkGauge,smudge:talkSmudge,office:talkOffice,whistle:talkWhistle,hatch:atHatch})[k](), exit:t=>atExit(t), payload:()=>savePayload(), apply:o=>applyPayload(o), code:()=>saveCode(), hall:()=>hallucinate(),
+  get state(){return G;}, get mode(){return mode;}, key:k=>dialogKey(k), talk:k=>({wick:talkWick,gauge:talkGauge,smudge:talkSmudge,office:talkOffice,whistle:talkWhistle,hatch:atHatch})[k](), exit:t=>atExit(t), payload:()=>savePayload(), apply:o=>applyPayload(o), code:()=>saveCode(), hall:()=>hallucinate(), map:seed=>genMap(seed),
   selfTest(n){
     n=n||40;
     for(let i=0;i<n;i++){
@@ -2533,9 +2833,30 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
     console.assert(cleanSave(good.data).notes.length===2&&!cleanSave(good.data).endings.fake,"save cleaned");
     console.assert(!applyPayload({game:"other",v:1,data:{}})&&!applyPayload(null)&&!applyPayload({game:"last-light",v:1,data:[1]}),"bad saves refused");
     console.assert(ENDING_IDS.length===18,"18 endings");
-    for(let i=0;i<n;i++){ const m=genMap(3000+i), bp=m.rooms.filter(r=>r.item&&r.item.kind==="blueprint");
-      console.assert(bp.length===1&&bp[0].dist<=3,"blueprint within 3 rooms of the start");
-      console.assert(m.rooms.filter(r=>r.item&&r.item.kind==="camera").length===1,"one camera"); }
+    const count=(m,k)=>m.rooms.reduce((a,r)=>a+(r.item&&r.item.kind===k?1:0)+r.crates.filter(c=>c.item===k).length,0);
+    for(let i=0;i<n;i++){ const m=genMap(3000+i), bp=m.rooms.filter(r=>(r.item&&r.item.kind==="blueprint")||r.crates.some(c=>c.item==="blueprint"));
+      console.assert(count(m,"blueprint")===1&&bp[0].dist>=1&&bp[0].dist<=3,"blueprint within 3 rooms of the start");
+      console.assert(count(m,"camera")===1,"one camera");
+      console.assert(count(m,"film")===3&&count(m,"flare")===2&&count(m,"wrench")===1,"film, flares and the wrench placed");
+      console.assert(new Set(m.rooms.map(r=>r.zone)).size===ZONES.length&&m.start.zone==="storage","seven zones, the start in Storage");
+      for(const z of ZONES){
+        const zr=m.rooms.filter(r=>r.zone===z.id), seen=new Set([zr[0]]), q=[zr[0]];
+        while(q.length){const r=q.pop(); for(const o of r.neighbors) if(o.zone===z.id&&!seen.has(o)){seen.add(o); q.push(o);}}
+        console.assert(seen.size===zr.length,"zone "+z.id+" is one piece");
+        for(const k of MUST[z.id]) console.assert(zr.filter(r=>r.kind===k).length>=MUST[z.id].filter(x=>x===k).length,z.id+" has its "+k);
+      }
+      for(const zid of PIPE_ZONES) console.assert(m.rooms.some(r=>r.broken&&r.zone===zid),"broken pipes in "+zid);
+      for(const r of m.rooms){
+        const reach=(x,y)=>r.reach[Math.floor(y/T)*RW+Math.floor(x/T)];
+        for(const d of Object.keys(r.nb)) console.assert(r.reach[{n:9,s:(RH-1)*RW+9,w:5*RW,e:5*RW+RW-1}[d]],"every door can be reached");
+        for(const c of r.crates) console.assert(r.tiles[c.ty*RW+c.tx]===7&&DIRS.some(([dx,dy])=>r.reach[(c.ty+dy)*RW+c.tx+dx]),"every crate can be reached");
+        for(const o of r.oil.concat(r.scrip,r.note?[r.note]:[],r.item?[r.item]:[])) console.assert(reach(o.x,o.y),"every item can be reached");
+        if(r.kind==="valve") console.assert(r.valves.length===3&&r.valves.every(v=>reach(v.x,T+10)),"three wheels, all in reach");
+        if(r.term) console.assert(reach(r.term.x,3*T+6),"terminal in reach");
+        if(r.hole) console.assert(reach(r.hole.x,7*T-4),"bore hole in reach");
+        if(r.broken) console.assert(PIPE_ZONES.includes(r.zone)&&(r.brokenX+12<9*T-3||r.brokenX-2>=11*T+3),"broken pipe clear of the door");
+      }
+    }
     const cj=cleanSave({journal:{seen:["moth","dragon","moth"],photos:["listener","moth",7]}}).journal;
     console.assert(cj.seen.join()==="moth"&&cj.photos.join()==="moth","journal cleaned: known creatures, photos only of met ones");
     console.assert(JIDS.length===BESTIARY.length&&BESTIARY.every(b=>JIDS.includes(b.id)),"every journal page has art");
