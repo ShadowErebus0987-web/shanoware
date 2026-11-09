@@ -74,7 +74,7 @@ service cloud.firestore {
     function validLastLight(d, m) {
       return d is map
         && d.keys().hasOnly(['runs', 'deaths', 'escapes', 'playtime', 'mostRooms', 'wickLore', 'best', 'met',
-                             'endings', 'notes', 'lastDeath', 'lastEnding', 'lastHelped', 'lantern', 'smudgeSaved', 'settings'])
+                             'endings', 'notes', 'lastDeath', 'lastEnding', 'lastHelped', 'lantern', 'smudgeSaved', 'settings', 'journal'])
         && d.keys().hasAll(['runs', 'deaths', 'escapes', 'playtime', 'mostRooms', 'wickLore', 'met', 'endings', 'notes'])
         && d.runs is int && d.runs >= 0 && d.runs <= 100000
         && d.deaths is int && d.deaths >= 0 && d.deaths <= d.runs
@@ -97,7 +97,12 @@ service cloud.firestore {
         && (!('lastDeath' in d) || (d.lastDeath is string && d.lastDeath.size() < 24))
         && (!('lastEnding' in d) || (d.lastEnding is string && d.lastEnding.size() < 24))
         && (!('lastHelped' in d) || (d.lastHelped is string && d.lastHelped.size() < 24))
-        && (!('lantern' in d) || d.lantern in ['brass', 'miner', 'foreman', 'whistle', 'candle', 'first'])
+        && (!('lantern' in d) || d.lantern in ['brass', 'miner', 'foreman', 'whistle', 'candle', 'keeper', 'first'])
+        // journal: 9 creatures, and a photo only of one already met
+        && (!('journal' in d) || (d.journal is map && hasExactly(d.journal, ['seen', 'photos'])
+            && d.journal.seen is list && d.journal.seen.size() <= 9 && d.journal.photos is list && d.journal.photos.size() <= 9
+            && d.journal.seen.hasOnly(['moth', 'listener', 'roughneck', 'tarling', 'knocker', 'smother', 'tenant', 'firedamp', 'timekeeper'])
+            && d.journal.seen.hasAll(d.journal.photos)))
         && (!('smudgeSaved' in d) || d.smudgeSaved == true)
         && (!('settings' in d) || (d.settings is map && d.settings.keys().hasOnly(['hints']) && d.settings.hints is bool))
         // The progress shown in the launcher must match the save itself.
@@ -105,8 +110,9 @@ service cloud.firestore {
         && m.progress is list && m.progress.size() == 3
         && m.progress[0] == {'l': 'Endings', 'h': d.endings.size(), 't': 18}
         && m.progress[1] == {'l': 'Notes', 'h': d.notes.size(), 't': 8}
-        && hasExactly(m.progress[2], ['l', 'h', 't']) && m.progress[2].l == 'Lanterns' && m.progress[2].t == 6
-        && m.progress[2].h is int && m.progress[2].h >= 1 && m.progress[2].h <= 6
+        && hasExactly(m.progress[2], ['l', 'h', 't']) && m.progress[2].l == 'Lanterns'
+        && m.progress[2].t is int && m.progress[2].t >= 6 && m.progress[2].t <= 7   // 7 since the Keeper's Lamp
+        && m.progress[2].h is int && m.progress[2].h >= 1 && m.progress[2].h <= m.progress[2].t
         && m.totals == {'Runs': d.runs, 'Escapes': d.escapes, 'Playtime': d.playtime};
     }
   }

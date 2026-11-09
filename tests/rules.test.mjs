@@ -79,6 +79,19 @@ const cheats = {
 for (const [name, d] of Object.entries(cheats)) {
   test('refuses ' + name, async () => { await withProfile('ann'); await assertFails(setDoc(doc(db('ann'), 'users/ann/saves/last-light-1'), save(d, { meta: meta({ ...llData(), ...d, endings: d.endings || {}, notes: Array.isArray(d.notes) ? d.notes : [] }) }))); });
 }
+test('accepts a save with a journal and the seventh lantern', async () => {
+  await withProfile('ann');
+  const d = llData({ journal: { seen: ['moth', 'listener'], photos: ['moth'] }, lantern: 'keeper' });
+  const m = meta(d); m.progress[2] = { l: 'Lanterns', h: 3, t: 7 };
+  await assertSucceeds(setDoc(doc(db('ann'), 'users/ann/saves/last-light-1'), save(d, { meta: m })));
+});
+test('refuses a journal photo of something never met, or an unknown creature', async () => {
+  await withProfile('ann');
+  const bad1 = llData({ journal: { seen: ['moth'], photos: ['listener'] } });
+  const bad2 = llData({ journal: { seen: ['dragon'], photos: [] } });
+  const bad3 = llData({ journal: { seen: [], photos: [], cheats: true } });
+  for (const d of [bad1, bad2, bad3]) await assertFails(setDoc(doc(db('ann'), 'users/ann/saves/last-light-1'), save(d)));
+});
 test('refuses progress that does not match the save', async () => {
   await withProfile('ann');
   const d = llData();

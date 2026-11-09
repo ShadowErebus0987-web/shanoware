@@ -45,6 +45,14 @@
   #b-down{right:calc(104px + env(safe-area-inset-right));bottom:calc(100px + env(safe-area-inset-bottom));width:52px!important;height:52px!important}
   #b-up{right:calc(76px + env(safe-area-inset-right));bottom:calc(164px + env(safe-area-inset-bottom));width:52px!important;height:52px!important}
   #b-pause{top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));height:44px!important;border-radius:8px!important}
+  #b-inv,#b-book{top:calc(12px + env(safe-area-inset-top));height:44px!important;border-radius:8px!important}
+  #b-inv{right:calc(12px + env(safe-area-inset-right))}
+  #b-book{right:calc(84px + env(safe-area-inset-right))}
+  #b-reload{right:calc(20px + env(safe-area-inset-right));bottom:calc(124px + env(safe-area-inset-bottom))}
+  #touch #b-reload{display:none}
+  body[data-cam="1"] #touch #b-reload{display:grid}
+  body[data-cam="1"] #touch #b-pour{display:none}
+  body:not([data-mode="play"]) #touch .top{display:none}
   /* movement and actions only while playing; Pause also shows in the pause menu */
   body:not([data-mode="play"]) #stick, body:not([data-mode="play"]) #touch .act{display:none}
   body:not([data-mode="play"]):not([data-mode="pause"]) #b-pause{display:none}
@@ -78,10 +86,14 @@
   <button type="button" class="act" id="b-down" data-key="KeyQ">-</button>
   <button type="button" class="act" id="b-up" data-key="KeyE">+</button>
   <button type="button" id="b-pause" data-key="Escape">PAUSE</button>
+  <button type="button" class="act" id="b-reload" data-key="KeyR">LOAD</button>
+  <button type="button" class="top" id="b-inv" data-key="Tab">BAG</button>
+  <button type="button" class="top" id="b-book" data-key="KeyB">BOOK</button>
 </div>
 <div id="turn" role="alert"><i></i><b>TURN YOUR PHONE</b><span>Last Light plays sideways.</span></div>
 
 <script src="../../errlog.js"></script>
+<script src="enemies.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

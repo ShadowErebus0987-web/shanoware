@@ -16,7 +16,8 @@
     "legacyKey": "lastlight.v1",
     "slots": 3,
     "files": [
-      "games/last-light/game.js"
+      "games/last-light/game.js",
+      "games/last-light/enemies.js"
     ],
     "avatars": [
       {

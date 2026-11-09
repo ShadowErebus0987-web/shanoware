@@ -26,6 +26,7 @@ const SAVE_KEY="lastlight.v1.slot"+SLOT;
 try{const old=localStorage.getItem("lastlight.v1"); if(old!==null&&localStorage.getItem("lastlight.v1.slot1")===null){localStorage.setItem("lastlight.v1.slot1",old); localStorage.removeItem("lastlight.v1");}}catch(e){}
 const OTHER_T=480, SHIFT_T=900;          // when the Other starts showing up, when the Black Shift starts
 const EXIT_TYPES=["hatch","lift","chimney","drain"];
+const JIDS=["moth","listener","roughneck","tarling","knocker","smother","tenant","firedamp","timekeeper"]; // journal pages
 
 const cv=document.getElementById("c");
 const ctx=cv.getContext("2d");
@@ -102,6 +103,13 @@ function genMap(seed,ev){
     const place=(r,kind)=>{const [x,y]=freeSpot(r,rnd); r.item={kind,x:x*T+8,y:y*T+9};};
     if(exits.some(e=>e.exitT==="hatch")) place(spare(),"crank");
     if(exits.some(e=>e.exitT==="lift")) for(let k=0;k<3;k++) place(spare(),"fuse");
+    // the blueprint is always close to the start; the camera a little further; film, flares and a wrench about
+    const near=(lo,hi)=>{for(let h=hi;h<30;h++){const c=shuffled(list.filter(r=>!used.has(r)&&!r.item&&r.dist>=lo&&r.dist<=h),rnd); if(c.length) return c[0];} return spare();};
+    place(near(1,3),"blueprint"); place(near(2,6),"camera");
+    for(let k=0;k<3;k++) place(spare(),"film");
+    for(let k=0;k<2;k++) place(spare(),"flare");
+    place(spare(),"wrench");
+    list.forEach(r=>{ r.noNight=r!==list[0]&&rnd()<0.12; }); // night vision shows only static here
     // eight worker notes, scattered
     shuffled(list.filter(r=>!used.has(r)),rnd).slice(0,NOTES.length).forEach((r,i)=>{const [x,y]=freeSpot(r,rnd); r.note={i,x:x*T+8,y:y*T+9};});
     return {rooms:list,start:list[0],exit:exit,exits:exits,rnd:rnd};
@@ -557,6 +565,7 @@ const LANTERNS=[
   {id:"foreman",name:"FOREMAN'S LAMP",perk:"MUCH BRIGHTER. THE MOTH LOVES IT.",how:"ESCAPE AFTER HELPING THE MOTH",has:s=>Object.keys(s.endings).some(k=>k.endsWith("_lamp")),radius:1.25,burn:1,moth:1.6,noise:1,sludge:1},
   {id:"whistle",name:"WHISTLE-MAN'S LAMP",perk:"YOUR NOISE IS HALF AS LOUD.",how:"ESCAPE AFTER HELPING THE LISTENER",has:s=>Object.keys(s.endings).some(k=>k.endsWith("_quiet")),radius:1,burn:1,moth:1,noise:0.5,sludge:1},
   {id:"candle",name:"SMUDGE'S CANDLE",perk:"THE DARK SPREADS SLOWER. BURNS FASTER.",how:"ESCAPE WITH SMUDGE",has:s=>Object.keys(s.endings).some(k=>k.endsWith("_sun")),radius:1,burn:1.25,moth:1,noise:1,sludge:0.7},
+  {id:"keeper",name:"THE KEEPER'S LAMP",perk:"THE BLACK RISES 25% SLOWER.",how:"COMPLETE THE JOURNAL",has:s=>!!(s.journal&&s.journal.photos&&s.journal.photos.length>=JIDS.length),radius:1,burn:1,moth:1,noise:1,sludge:0.75},
   {id:"first",name:"THE FIRST LAMP",perk:"A LITTLE BETTER AT EVERYTHING.",how:"???",has:s=>!!s.endings.secret,radius:1.06,burn:0.85,moth:0.9,noise:0.8,sludge:0.85}
 ];
 const EVENTS={
@@ -676,7 +685,7 @@ function stopLoops(){
 {const scare=sfx.scare, pain=sfx.pain; sfx.scare=function(){buzz([60,40,160]); return scare.apply(this,arguments);}; sfx.pain=function(){buzz(40); return pain.apply(this,arguments);};}
 
 /* ================= save ================= */
-function loadSave(){try{return cleanSave(JSON.parse(localStorage.getItem(SAVE_KEY)))||{};}catch(e){return {};}}
+function loadSave(){try{return cleanSave(JSON.parse(localStorage.getItem(SAVE_KEY))||{})||cleanSave({});}catch(e){return cleanSave({});}} // no save yet = a complete empty one
 function writeSave(s){try{localStorage.setItem(SAVE_KEY,JSON.stringify(s)); writeMeta(s);}catch(e){}}
 // Shanoware reads this summary to show progress, unlocks and totals for the save slot.
 function writeMeta(s,when=Date.now()){try{
@@ -702,6 +711,10 @@ function cleanSave(d){
   out.notes=Array.isArray(d.notes)?[...new Set(d.notes.filter(i=>Number.isInteger(i)&&i>=0&&i<NOTES.length))]:[];
   for(const k of ["lastDeath","lastEnding","lastHelped","lantern"]) if(typeof d[k]==="string"&&d[k].length<24) out[k]=d[k];
   if(d.smudgeSaved===true) out.smudgeSaved=true;
+  // journal: only known creatures, no repeats, and a photo only of something already met
+  const jj=d.journal&&typeof d.journal==="object"&&!Array.isArray(d.journal)?d.journal:{};
+  const seen=Array.isArray(jj.seen)?[...new Set(jj.seen.filter(x=>JIDS.includes(x)))]:[];
+  out.journal={seen,photos:Array.isArray(jj.photos)?[...new Set(jj.photos.filter(x=>seen.includes(x)))]:[]};
   if(d.settings&&typeof d.settings==="object") out.settings={hints:d.settings.hints!==false};
   return out;
 }
@@ -765,7 +778,7 @@ function newGame(){
     lis:{kind:"lis",room:lisRoom,inRoom:false,x:0,y:0,state:"wander",target:null,moveT:8,tx:0,ty:0,listenT:0,stunT:0,safeT:0,wx:160,wy:96,wT:0,idleT:0,exitDir:null,clickT:1},
     hitCool:0, heartT:0, shake:0, scare:null, slide:null, dying:null,
     distCur:null, exitSeen:false, toasts:{}, drips:[], motes:[], visitedCount:1,
-    scrip:0, boots:false, helped:null, burnMul:1, sit:null, hatchCool:0, dlg:null, introPanel:null, metWick:false, jokeI:0,
+    scrip:0, boots:false, tea:0, flares:0, film:0, loaded:0, camera:false, blueprint:false, wrench:false, cam:null, flare:null, reloadT:0, ui:null, invSel:0, jSel:0, invMsg:"", helped:null, burnMul:1, sit:null, hatchCool:0, dlg:null, introPanel:null, metWick:false, jokeI:0,
     smudge:{follow:false,x:0,y:0}, officeLit:false, save:loadSave(),
     ev, lan:LANTERNS[0], crank:false, fuses:0, exitSeq:null, liftT:0, liftReady:false, liftClank:0,
     other:null, figure:null, echo:0, doorShut:null, wrongFace:0, hallT:60+Math.random()*40, blackShift:false, secret:false, enteredFrom:null,
@@ -835,6 +848,7 @@ function lightRadius(){return lightOn()?RADIUS[G.level]*G.lan.radius:0;}
 function updateMoth(dt){
   const m=G.moth, a=agg(m), on=lightOn();
   if(m.gone||m.calm) return;
+  m.flashT=Math.max(0,(m.flashT||0)-dt);
   if(!m.inRoom){
     const d=G.distCur[m.room.id];
     const pull=on?[0,0.6,2.2,5][G.level]*G.lan.moth:-4;
@@ -853,7 +867,9 @@ function updateMoth(dt){
   if(m.exitDir){stepConcreteExit(m,40,dt);return;}
   const sees=on&&(G.level>1||d<70);
   let tx,ty,sp;
-  if(sees){tx=L.x;ty=L.y;sp=Math.min(95,(26+12*G.level)*a);m.leaveT=0;}
+  const fl=G.flare&&G.flare.room===G.room?G.flare:null;
+  if(fl){tx=fl.x;ty=fl.y-8;sp=Math.min(95,40*a);m.leaveT=0;}                                  // it would rather have the flare
+  else if(sees||m.flashT>0){tx=L.x;ty=L.y;sp=Math.min(95,(26+12*Math.max(1,G.level))*a);m.leaveT=0;} // a camera flash calls it
   else{
     m.leaveT+=dt; m.wT-=dt;
     if(m.wT<=0){m.wT=1.5+Math.random()*2;m.wx=30+Math.random()*(W-60);m.wy=64+Math.random()*(H-104);}
@@ -864,7 +880,7 @@ function updateMoth(dt){
   const wob=Math.sin(G.elapsed*7+m.x*0.05)*0.6;
   m.x+=(dx/len-dy/len*wob)*sp*dt; m.y+=(dy/len+dx/len*wob)*sp*dt;
   m.x=clamp(m.x,10,W-10); m.y=clamp(m.y,12,H-10);
-  if(on&&m.safeT<=0&&d<9) die("moth");
+  if(on&&m.safeT<=0&&d<9&&!fl) die("moth"); // while it chases a flare it ignores Ash
 }
 
 function updateListener(dt){
@@ -1067,10 +1083,11 @@ function buy(i){
   if(G.scrip<cost){dialog([["WICK","NO SCRIP, NO DEAL. THOSE ARE THE RULES. I DIDN'T MAKE THEM. ...OKAY, I MADE THEM."]],shopMenu);return;}
   if(i===0&&G.flasks>=3){dialog([["WICK","YOU CAN'T CARRY MORE. I'M NOT A MIRACLE WORKER. I'M A WICK."]],shopMenu);return;}
   if(i===1&&G.boots){dialog([["WICK","YOU'RE ALREADY WEARING THEM. I CHECKED."]],shopMenu);return;}
+  if(i===2&&G.tea>=3){dialog([["WICK","THREE CUPS IS PLENTY. ANY MORE AND YOU'LL SLOSH."]],shopMenu);return;}
   G.scrip-=cost; sfx.coin();
   if(i===0){G.flasks++; dialog([["WICK","ONE FLASK. DON'T DRINK IT."]],shopMenu);}
   if(i===1){G.boots=true; dialog([["WICK","SOFT BOOTS. BROKEN GLASS WON'T MAKE A SOUND UNDER YOU NOW."]],shopMenu);}
-  if(i===2){G.sludge=Math.max(0,G.sludge-35); dialog([["WICK","BITTER TEA. IT PULLS THE BLACK OUT OF YOU. A LITTLE."]],shopMenu);}
+  if(i===2){G.tea++; dialog([["WICK","BITTER TEA. DRINK IT WHEN THE BLACK GETS BAD. IT PULLS SOME OUT."]],shopMenu);}
   if(i===3){G.fuses++; dialog([["WICK","A FUSE. DON'T ASK WHERE I GOT IT."]],shopMenu);}
 }
 function talkGauge(){
@@ -1233,8 +1250,14 @@ function update(dt){
   }
   if(G.slide){G.slide.t+=dt/0.32; if(G.slide.t>=1) G.slide=null; return;}
   if(G.dlg){updDialog(dt); return;}            // talking stops the clock
+  if(G.ui) return;                              // so do the bag and the journal
 
   G.elapsed+=dt;
+  if(G.flare){G.flare.t-=dt; if(G.flare.t<=0) G.flare=null;}
+  if(G.cam) G.cam.flash=Math.max(0,G.cam.flash-dt);
+  if(G.reloadT>0){G.reloadT-=dt; if(G.reloadT<=0){const n=Math.min(G.film,3-G.loaded); G.film-=n; G.loaded+=n; sfx.click();}}
+  if(G.moth.inRoom&&!G.moth.gone) journalSeen("moth");
+  if(G.lis.inRoom&&!G.lis.gone) journalSeen("listener");
   G.hatchCool=Math.max(0,G.hatchCool-dt);
   if(G.sit){G.sit.t-=dt; if(G.sit.t<=0){endSit(); return;}}
   if(G.exitSeq&&updExitSeq(dt)) return;
@@ -1250,7 +1273,7 @@ function update(dt){
   if(keys.has("KeyW")||keys.has("ArrowUp")) my-=1;
   if(keys.has("KeyS")||keys.has("ArrowDown")) my+=1;
   const run=keys.has("ShiftLeft")||keys.has("ShiftRight");
-  if(G.sit||G.exitSeq){mx=0;my=0;}
+  if(G.sit||G.exitSeq||G.cam){mx=0;my=0;} // a raised camera holds Ash still
   p.moving=!!(mx||my);
   if(p.moving){
     const l=Math.hypot(mx,my); mx/=l; my/=l;
@@ -1316,7 +1339,8 @@ function update(dt){
   if(it&&dist(it.x,it.y,p.x,p.y)<10){
     G.room.item=null; sfx.pickup();
     if(it.kind==="crank"){G.crank=true; toast("crank","A RUSTED CRANK. IT LOOKS LIKE IT FITS A HATCH.");}
-    else {G.fuses++; G.toasts.fuse=0; toast("fuse","A FUSE. "+G.fuses+" OF 3.");}
+    else if(it.kind==="fuse"){G.fuses++; G.toasts.fuse=0; toast("fuse","A FUSE. "+G.fuses+" OF 3.");}
+    else pickUp(it.kind);
   }
   const h=G.room.hatch;
   if(h){
@@ -1489,6 +1513,8 @@ function render(){
   else if(G){
     renderGame();
     ctx.setTransform(1,0,0,1,0,0);
+    if(G.cam&&mode!=="end") renderCamera();
+    if(G.ui==="inv") renderInv(); else if(G.ui==="journal") renderJournal();
     if(mode==="pause") renderPause();
     if(mode==="end") renderEnd();
   }
@@ -1502,6 +1528,7 @@ function staticLights(){
   if(r.exitT==="chimney") out.push({x:r.hatch.x,y:18,r:30});
   if(r.special==="shop") out.push({x:OBJ.x,y:OBJ.y-46,r:58});
   if(r.special==="office"&&G.officeLit) out.push({x:OBJ.x+8,y:OBJ.y-12,r:64});
+  if(G.flare&&G.flare.room===r) out.push({x:G.flare.x,y:G.flare.y-3,r:48+Math.sin(G.elapsed*31)*4});
   return out;
 }
 function interactables(){
@@ -1682,7 +1709,9 @@ function renderGame(){
   if(rm.special==="smudge"&&!G.smudge.follow) drawSmudge(ctx,OBJ.x,OBJ.y+4,t);
   for(const l of rm.lamps){px(ctx,"#2a2622",l.x-3,l.y-6,6,2); px(ctx,"#3a3530",l.x-2,l.y-4,4,6); px(ctx,l.dead?"#141210":(Math.sin(t*7+l.ph)>0.93?"#8a6a2a":"#f2c35a"),l.x-1,l.y-3,2,4);}
   if(rm.kind==="boiler") px(ctx,Math.sin(t*9)>0?"#c4561e":"#a8401a",2*T+26,2*T+11,12,8);
-  if(rm.item){const it=rm.item; if(it.kind==="crank"){px(ctx,"#5a4f45",it.x-4,it.y-1,8,2); px(ctx,"#5a4f45",it.x+3,it.y-5,2,5); px(ctx,"#2a2622",it.x-5,it.y-2,2,4);} else {px(ctx,"#2a2622",it.x-2,it.y-4,4,7); px(ctx,"#c9a04a",it.x-2,it.y-4,4,1); px(ctx,"#c9a04a",it.x-2,it.y+2,4,1); px(ctx,"#e8e4dc",it.x-1,it.y-2,2,3);}}
+  if(G.flare&&G.flare.room===G.room) drawFlare(G.flare);
+  if(rm.item&&FLOOR_ICONS.includes(rm.item.kind)) floorItem(ctx,rm.item);
+  else if(rm.item){const it=rm.item; if(it.kind==="crank"){px(ctx,"#5a4f45",it.x-4,it.y-1,8,2); px(ctx,"#5a4f45",it.x+3,it.y-5,2,5); px(ctx,"#2a2622",it.x-5,it.y-2,2,4);} else {px(ctx,"#2a2622",it.x-2,it.y-4,4,7); px(ctx,"#c9a04a",it.x-2,it.y-4,4,1); px(ctx,"#c9a04a",it.x-2,it.y+2,4,1); px(ctx,"#e8e4dc",it.x-1,it.y-2,2,3);}}
   if(rm.exitT==="lift"){const x=rm.hatch.x, y=rm.hatch.y; for(let k=0;k<3;k++) px(ctx,k<G.fuses?"#c9a04a":"#0a0908",x+22+k*3,y-20,2,6); if(G.liftReady){px(ctx,"#3a3530",x-14,y-28,28,2);} if(G.liftT>0) px(ctx,"#8a6a2a",x-1,0,2,y-30);}
   if(rm.exitT==="drain"&&Math.sin(t*2)>0) px(ctx,"#22383c",rm.hatch.x-10+Math.floor((t*9)%20),rm.hatch.y-2,4,1);
   if(G.doorShut&&G.doorShut.room===rm){const d=G.doorShut.dir, D=DOOR[d], hor=d==="n"||d==="s"; for(let k=0;k<6;k++) hor?px(ctx,"#3a3530",D.x-16+k*6,d==="n"?0:H-T,3,T):px(ctx,"#3a3530",d==="w"?0:W-T,D.y-16+k*6,T,3);}
@@ -1712,6 +1741,7 @@ function renderGame(){
     ctx.globalCompositeOperation="source-over";
   }
 
+  const nv=!!(G.cam&&G.cam.filter===1); // night vision
   // the dark
   dg.globalCompositeOperation="source-over"; dg.clearRect(0,0,W,H);
   dg.fillStyle="rgba(1,1,2,.985)"; dg.fillRect(0,0,W,H);
@@ -1728,10 +1758,10 @@ function renderGame(){
   const amb=dg.createRadialGradient(p.x,p.y-8,0,p.x,p.y-8,14);
   amb.addColorStop(0,"rgba(0,0,0,.22)"); amb.addColorStop(1,"rgba(0,0,0,0)");
   dg.fillStyle=amb; dg.fillRect(p.x-16,p.y-24,32,32);
-  ctx.drawImage(darkC,0,0);
+  if(nv) nightVision(); else ctx.drawImage(darkC,0,0);
 
   // the dark reaching in: tendrils licking at the edge of the light
-  const reach=G.growing?clamp(G.sludge/100*0.6+0.15,0,0.7):(G.level===1&&on?0.12:0);
+  const reach=nv?0:G.growing?clamp(G.sludge/100*0.6+0.15,0,0.7):(G.level===1&&on?0.12:0);
   if(reach>0){
     const cx=on?L.x:p.x, cy=on?L.y:p.y-8, base=on?rr+2:28;
     ctx.strokeStyle="#040305"; ctx.lineCap="round";
@@ -1806,7 +1836,7 @@ function drawOther(g,o,t){
 }
 /* ================= side panels: the HUD sits beside the room, never on it ================= */
 const pl=document.getElementById("pl"), pr=document.getElementById("pr"), plc=pl.getContext("2d"), prc=pr.getContext("2d");
-const PMIN=36, PMAX=92; let PW=PMIN;
+const PMIN=36, PMAX=92; let PW=PMIN, quickHits=[];
 const faceC=mk(PN,PN), faceG=faceC.getContext("2d");
 function drawPanels(){
   for(const [g,edge] of [[plc,PW-1],[prc,0]]){ g.imageSmoothingEnabled=false; g.fillStyle=G&&mode!=="title"?"#0b0a09":"#050505"; g.fillRect(0,0,PW,H); if(G&&mode!=="title") px(g,"#1c1a17",edge,0,1,H); }
@@ -1818,6 +1848,7 @@ function drawPanels(){
   const mx0=Math.round(c-(9*cw)/2), my0=(slim?6:16)+top;
   if(!slim) text(plc,"MAP",c,5+top,1,INK3,"c");
   px(plc,"rgba(0,0,0,.55)",mx0-2,my0-2,9*cw+3,7*ch+3);
+  if(G.blueprint){ // no map at all until the blueprint is found
   for(const r of G.rooms){
     const dx=r.x-G.room.x+4, dy=r.y-G.room.y+3;
     if(dx<0||dy<0||dx>8||dy>6) continue;
@@ -1834,24 +1865,27 @@ function drawPanels(){
     const dx=ex.x-G.room.x+4, dy=ex.y-G.room.y+3;
     if(dx<0||dy<0||dx>8||dy>6){const cx=clamp(dx,0,8), cy=clamp(dy,0,6); if(Math.sin(G.elapsed*5)>0) px(plc,"#8fb4c4",mx0+cx*cw,my0+cy*ch,Math.max(1,cw-2),Math.max(1,ch-1));}
   }
+  } else text(plc,slim?"?":"NO MAP",c,my0+Math.round(7*ch/2)-3,1,INK3,"c");
   const lw=slim?10:20, lh=slim?16:32, ly=my0+7*ch+(slim?8:14), lx=c-Math.round(lw/2)-(slim?2:4);
   plc.drawImage(lanternIcon(lightOn()?G.level:0,G.fuel,G.elapsed),lx,ly,lw,lh);
   const bx=lx+lw+(slim?2:4), bw=slim?2:3, fh=Math.round(lh*clamp(G.fuel,0,100)/100); // fuel bar
   px(plc,"#1c1a17",bx,ly,bw,lh); px(plc,G.fuel<25?BLOOD:FLAME,bx,ly+lh-fh,bw,fh);
   if(G.pouring>0) px(plc,"#d18b2a",lx,ly+lh+2,Math.round((1-G.pouring/0.9)*(lw+bw+4)),1);
   if(!slim) text(plc,"LAMP",c,ly+lh+6,1,INK3,"c");
-  // quick slots: oil flasks, crank, fuses
+  // quick slots: oil, flares, camera; tap or click one to use it
   const sz=slim?10:14, gap=2, sx0=c-Math.round((3*sz+2*gap)/2), sy=ly+lh+(slim?6:16);
-  for(let i=0;i<3;i++){const x=sx0+i*(sz+gap); px(plc,"#1c1a17",x,sy,sz,sz); px(plc,"#0b0a09",x+1,sy+1,sz-2,sz-2);}
-  const cx=k=>sx0+k*(sz+gap)+Math.floor(sz/2);
-  if(G.flasks>0){const fx=cx(0)-2, fy=sy+(slim?1:2); px(plc,"#8a6a44",fx+1,fy,2,1); px(plc,"#6b4a22",fx,fy+1,4,slim?7:9); px(plc,"#d18b2a",fx+1,fy+2,2,slim?5:7);
-    if(slim) for(let i=0;i<G.flasks;i++) px(plc,INK2,sx0+1+i*3,sy+sz+2,2,1); else text(plc,String(G.flasks),sx0+sz+1,sy+sz-6,1,INK,"r");}
-  if(G.crank){const kx=cx(1)-3, ky=sy+Math.floor(sz/2)-1; px(plc,"#5a4f45",kx,ky+2,7,2); px(plc,"#5a4f45",kx+5,ky-2,2,4);}
-  if(G.fuses>0||G.map.exits.some(e=>e.exitT==="lift"&&e.visited)){const fx=cx(2)-2, fy=sy+(slim?1:2); px(plc,"#2a2622",fx,fy,4,slim?7:9); px(plc,G.fuses?"#c9a04a":"#3a3530",fx,fy,4,1);
-    if(slim) for(let i=0;i<G.fuses;i++) px(plc,"#c9a04a",sx0+2*(sz+gap)+1+i*3,sy+sz+2,2,1); else text(plc,G.fuses+"/3",sx0+3*sz+2*gap,sy+sz+2,1,INK2,"r");}
+  quickHits=[];
+  ["flask","flare","camera"].forEach((id,i)=>{
+    const x=sx0+i*(sz+gap), n=ITEMS[id].n(), on=id==="camera"&&!!G.cam;
+    px(plc,on?FLAME:"#1c1a17",x,sy,sz,sz); px(plc,"#0b0a09",x+1,sy+1,sz-2,sz-2);
+    if(n>0){ drawIcon(plc,id,x+1,sy+1,sz-2);
+      if(n>1){ if(slim) for(let k=0;k<Math.min(n,3);k++) px(plc,INK2,x+1+k*3,sy+sz+2,2,1); else text(plc,String(n),x+sz,sy+sz+2,1,INK2,"r"); } }
+    quickHits.push({id,x,y:sy,w:sz,h:sz});
+  });
   // RIGHT: Ash, the timer, scrip
-  const ps=slim?32:Math.min(48,PW-12), pyy=slim?6:16;
-  if(!slim) text(prc,"ASH",c,5,1,INK3,"c");
+  const rtop=touchMode()?32:0; // room for the touch Bag and Book buttons
+  const ps=slim?32:Math.min(48,PW-12), pyy=(slim?6:16)+rtop;
+  if(!slim) text(prc,"ASH",c,5+rtop,1,INK3,"c");
   faceG.clearRect(0,0,PN,PN);
   drawPortrait(faceG,0,0,G.sludge,G.elapsed,G.growing&&!G.dying?true:false,fxRnd);
   if(G.wrongFace>0){ // for a moment, the face beside the room isn't yours
@@ -1928,6 +1962,7 @@ const titleMenu={sel:0,confirm:null,items:()=>[
 ]};
 const pauseMenu={sel:0,confirm:null,items:()=>[
   {label:"RESUME",fn:togglePause},
+  {label:"JOURNAL",fn:()=>{togglePause(); G.ui="journal";}},
   {label:"SETTINGS",fn:openSettings},
   {label:"RESTART RUN",confirm:"RESTART? THIS RUN WILL BE LOST.",fn:begin},
   {label:"EXPORT SAVE",confirm:"SAVE A FILE TO THIS DEVICE?",fn:exportSave},
@@ -2003,9 +2038,9 @@ function renderPause(){
   const help=touchMode()?["JOYSTICK MOVE   HOLD RUN TO RUN","SMALL BUTTONS: LANTERN   POUR   USE"]:
     [moveKeys()+" MOVE   "+K("run")+" RUN   "+K("dim")+"/"+K("bright")+" LANTERN",K("pour")+" POUR OIL   "+K("use")+" TALK / READ / USE"];
   if(!settingsOpen){ const hw=Math.max(textW(help[0],1),textW(help[1],1))+20;
-    uiFrame(ctx,Math.round(W/2-hw/2),114,hw,28,"#2a2622","rgba(5,5,5,.9)");
-    text(ctx,help[0],W/2,119,1,INK3,"c"); text(ctx,help[1],W/2,129,1,INK3,"c");
-    text(ctx,"LANTERN: "+G.lan.name+(EVENTS[G.ev]?"   "+EVENTS[G.ev].replace("TONIGHT: ","").split(".")[0]:""),W/2,150,1,INK3,"c"); }
+    uiFrame(ctx,Math.round(W/2-hw/2),122,hw,28,"#2a2622","rgba(5,5,5,.9)");
+    text(ctx,help[0],W/2,127,1,INK3,"c"); text(ctx,help[1],W/2,137,1,INK3,"c");
+    text(ctx,"LANTERN: "+G.lan.name+(EVENTS[G.ev]?"   "+EVENTS[G.ev].replace("TONIGHT: ","").split(".")[0]:""),W/2,158,1,INK3,"c"); }
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,176,1,FLAME,"c","#000");
 }
 const endPortrait=mk(PN,PN), epg=endPortrait.getContext("2d");
@@ -2034,6 +2069,220 @@ function renderEnd(){
   if(titleT>0.8){ const msg=touchMode()?(e.cause==="won"?"TAP TO GO BACK DOWN":"TAP TO TRY AGAIN"):(e.cause==="won"?"ENTER: GO BACK DOWN":"ENTER: TRY AGAIN")+"   ESC: MAIN MENU", mw=textW(msg,1)+20;
     uiFrame(ctx,Math.round(W/2-mw/2),174,mw,15,Math.floor(titleT*1.6)%2===0?FLAME:INK3,"rgba(5,5,5,.95)");
     text(ctx,msg,W/2,178,1,INK,"c"); }
+}
+
+/* ================= items, the bag, the camera and the journal ================= */
+function tell(msg){ if(G){ G.toast={msg,t:0}; say(msg); } }
+// 12 x 12 icons drawn in code, in the game's own palette
+function itemIcon(g,id,x,y){
+  const P=(c,a,b,w,h)=>px(g,c,x+a,y+b,w,h);
+  if(id==="flask"){P("#8a6a44",5,1,2,2); P("#6b4a22",3,3,6,8); P("#d18b2a",4,5,4,5); P("#f0c070",4,5,1,1);}
+  else if(id==="tea"){P("#e8e4dc",3,5,6,5); P("#e8e4dc",9,6,2,2); P("#6b4a22",4,6,4,1); P("#8f8778",4,1,1,3); P("#8f8778",6,0,1,3); P("#5c564c",2,10,8,1);}
+  else if(id==="flare"){P("#7a2a22",4,3,3,8); P("#c4473a",4,3,1,8); P("#e8e4dc",4,2,3,1); P("#f2c35a",5,0,1,2); P("#fff1c8",5,1,1,1);}
+  else if(id==="camera"){P("#2a2826",1,3,10,7); P("#4a4744",1,3,10,1); P("#2a2826",3,2,3,1); P("#8f8778",4,5,4,4); P("#141210",5,6,2,2); P("#e8e4dc",9,4,1,1);}
+  else if(id==="film"){P("#141210",3,2,6,9); P("#e8c040",3,3,6,7); P("#141210",3,6,6,1); P("#8a6a2a",5,0,2,2); P("#2a2622",8,8,3,2);}
+  else if(id==="blueprint"){P("#3a5a8a",1,2,10,8); P("#5a7aaa",1,2,10,1); P("#cfe0f0",3,4,4,1); P("#cfe0f0",3,6,6,1); P("#cfe0f0",6,4,1,4); P("#2a4a6a",10,3,1,7);}
+  else if(id==="boots"){P("#5a3a22",2,2,4,7); P("#5a3a22",2,8,8,2); P("#3a2614",2,10,8,1); P("#7a5233",3,2,2,1);}
+  else if(id==="wrench"){for(let k=0;k<5;k++) P("#8f8778",2+k,8-k,2,2); P("#b8b0a0",7,1,4,2); P("#b8b0a0",7,3,1,2); P("#b8b0a0",10,3,1,2);}
+  else if(id==="crank"){P("#5a4f45",2,7,8,2); P("#5a4f45",8,2,2,5); P("#2a2622",1,6,2,4);}
+  else if(id==="fuse"){P("#2a2622",4,1,4,10); P("#c9a04a",4,1,4,1); P("#c9a04a",4,10,4,1); P("#e8e4dc",5,4,2,4);}
+  else if(id==="scrip"){P("#8a6a2a",3,3,6,6); P("#c9a04a",3,3,5,5); P("#f0d080",4,4,1,1);}
+}
+const icC=mk(12,12), icG=icC.getContext("2d");
+function drawIcon(g,id,x,y,sz){ icG.clearRect(0,0,12,12); itemIcon(icG,id,0,0); g.imageSmoothingEnabled=false; g.drawImage(icC,Math.round(x),Math.round(y),sz,sz); }
+const FLOOR_ICONS=["blueprint","camera","film","flare","wrench"];
+function floorItem(g,it){ drawIcon(g,it.kind,it.x-6,it.y-11,12); if(Math.sin(G.elapsed*3+it.x)>0.9) px(g,"#fff1c8",it.x+3,it.y-10); }
+function drawFlare(f){
+  const x=Math.round(f.x), y=Math.round(f.y);
+  px(ctx,"#7a2a22",x-1,y-3,2,4); px(ctx,Math.sin(G.elapsed*40)>0?"#ffd0a0":"#f2c35a",x-1,y-5,2,2);
+  if(Math.random()<0.6) px(ctx,"#ff7a4a",x-2+Math.floor(Math.random()*4),y-7-Math.floor(Math.random()*4));
+}
+function pickUp(kind){
+  if(kind==="blueprint"){G.blueprint=true; tell("THE BLUEPRINT. NOW YOU HAVE A MAP.");}
+  if(kind==="camera"){G.camera=true; G.loaded=Math.max(G.loaded,2); tell("A CAMERA. TWO SHOTS LEFT. RAISE IT FROM THE BAG.");}
+  if(kind==="film"){G.film+=2; tell("TWO ROLLS OF FILM. "+K("reload")+" LOADS THEM.");}
+  if(kind==="flare"){G.flares++; tell("A FLARE. THROW IT. THE MOTH WILL CHASE IT.");}
+  if(kind==="wrench"){G.wrench=true; tell("A WRENCH. VALVE WHEELS WILL TURN FASTER.");}
+}
+// What each thing is, how many you have, and what using it does (a message means it couldn't be used).
+const ITEMS={
+  flask:{name:"OIL FLASK",desc:"POUR IT INTO THE LANTERN.",n:()=>G.flasks,use:()=>pourOil(),verb:"POUR"},
+  tea:{name:"BITTER TEA",desc:"DRINK IT. IT PULLS SOME OF THE BLACK OUT OF YOU.",n:()=>G.tea,use:()=>drinkTea(),verb:"DRINK"},
+  flare:{name:"FLARE",desc:"THROW IT. THE MOTH CHASES ITS LIGHT INSTEAD OF YOURS.",n:()=>G.flares,use:()=>throwFlare(),verb:"THROW"},
+  camera:{name:"CAMERA",desc:"PHOTOS GO IN THE JOURNAL. ASH STANDS STILL WHILE IT IS UP.",n:()=>G.camera?1:0,use:()=>toggleCamera(),verb:"RAISE"},
+  film:{name:"FILM",desc:"ONE PHOTO EACH. THE CAMERA HOLDS THREE.",n:()=>G.film},
+  blueprint:{name:"BLUEPRINT",desc:"A MAP OF THE WORKS. IT SHOWS ON THE LEFT.",n:()=>G.blueprint?1:0},
+  boots:{name:"SOFT BOOTS",desc:"BROKEN GLASS MAKES NO SOUND UNDER YOU.",n:()=>G.boots?1:0},
+  wrench:{name:"WRENCH",desc:"TURNS VALVE WHEELS TWICE AS FAST.",n:()=>G.wrench?1:0},
+  crank:{name:"CRANK",desc:"IT FITS A HATCH SOMEWHERE.",n:()=>G.crank?1:0},
+  fuse:{name:"FUSES",desc:"THE LIFT NEEDS THREE.",n:()=>G.fuses},
+  scrip:{name:"SCRIP",desc:"BRASS TOKENS. WICK TAKES THESE.",n:()=>G.scrip}
+};
+const invItems=()=>Object.keys(ITEMS).filter(id=>ITEMS[id].n()>0);
+function pourOil(){ if(G.flasks<1) return "NO OIL FLASKS."; if(G.pouring>0) return "ALREADY POURING."; if(G.fuel>=100) return "THE LANTERN IS FULL.";
+  G.pouring=0.9; sfx.pour(); noise(G.p.x,G.p.y,0.3); }
+function drinkTea(){ if(G.tea<1) return "NO TEA."; G.tea--; G.sludge=Math.max(0,G.sludge-35); sfx.pickup(); tell("BITTER. SOME OF THE BLACK LETS GO."); }
+function throwFlare(){
+  if(G.flares<1) return "NO FLARES.";
+  const d={u:[0,-1],d:[0,1],l:[-1,0],r:[1,0]}[G.p.dir]||[0,1];
+  G.flares--; G.flare={x:clamp(G.p.x+d[0]*44,24,W-24),y:clamp(G.p.y+d[1]*36,30,H-14),t:8,room:G.room};
+  nz({dur:0.7,freq:5200,q:0.6,gain:0.07}); noise(G.flare.x,G.flare.y,0.35); tell("THE FLARE CATCHES. LET IT HAVE THE ATTENTION.");
+}
+function toggleCamera(){ if(!G.camera) return "NO CAMERA."; G.cam=G.cam?null:{filter:0,flash:0}; sfx.click(); }
+function reloadFilm(){
+  if(!G.camera||G.reloadT>0) return;
+  if(G.loaded>=3){ tell("THE CAMERA IS ALREADY FULL."); return; }
+  if(G.film<1){ tell("NO FILM LEFT."); return; }
+  G.reloadT=1.2; sfx.click(); noise(G.p.x,G.p.y,0.15);
+}
+// Who is in the picture. Later creatures add themselves here.
+function photoTargets(){ const out=[]; if(G.moth.inRoom&&!G.moth.gone) out.push("moth"); if(G.lis.inRoom&&!G.lis.gone) out.push("listener"); return out; }
+function takePhoto(){
+  if(G.reloadT>0) return;
+  if(G.loaded<1){ sfx.click(); tell(G.film?"NO FILM LOADED. "+K("reload")+" LOADS IT.":"OUT OF FILM."); return; }
+  G.loaded--;
+  nz({dur:0.05,freq:3200,q:2,gain:0.14}); setTimeout(()=>nz({dur:0.04,freq:1700,q:3,gain:0.09}),70);
+  if(G.cam.filter===0){ // the flash: seen by everything, wanted by the Moth
+    G.cam.flash=0.3; noise(G.p.x,G.p.y,0.5);
+    const m=G.moth; if(!m.gone&&!m.calm){ m.interest=100; m.moveT=Math.min(m.moveT,0.5); m.flashT=5; }
+  }
+  const got=photoTargets(); got.forEach(journalPhoto);
+  if(!got.length) tell("JUST DARK AND PIPES IN THAT ONE.");
+}
+function camKey(code){
+  if(code==="KeyA"||code==="KeyD"){ G.cam.filter^=1; sfx.click(); return true; }
+  if(code==="Space"){ takePhoto(); return true; }
+  if(code==="KeyW"||code==="KeyS"){ G.cam=null; sfx.click(); return true; }
+  return false;
+}
+function nightVision(){
+  if(G.room.noNight){ for(let i=0;i<1400;i++) px(ctx,Math.random()<0.5?"#18241a":"#3e523f",Math.floor(Math.random()*W),Math.floor(Math.random()*H),2,1);
+    text(ctx,"NO SIGNAL",W/2,H/2-4,1,"#9fdc9f","c","#000"); return; }
+  ctx.globalCompositeOperation="multiply"; px(ctx,"#64ff86",0,0,W,H);
+  ctx.globalCompositeOperation="lighter"; px(ctx,"rgba(18,54,24,.4)",0,0,W,H);
+  ctx.globalCompositeOperation="source-over";
+  for(let y=0;y<H;y+=2) px(ctx,"rgba(0,0,0,.2)",0,y,W,1);
+  for(let i=0;i<70;i++) px(ctx,"rgba(170,255,180,.25)",Math.floor(Math.random()*W),Math.floor(Math.random()*H));
+}
+function renderCamera(){
+  const c=G.cam, nvOn=c.filter===1, col=nvOn?"#9fdc9f":INK;
+  for(const [x,y,sx,sy] of [[8,8,1,1],[W-9,8,-1,1],[8,H-9,1,-1],[W-9,H-9,-1,-1]]){ px(ctx,col,sx>0?x:x-9,y,10,1); px(ctx,col,x,sy>0?y:y-9,1,10); }
+  text(ctx,"< "+(nvOn?"NIGHT VISION":"NORMAL")+" >",14,13,1,col,undefined,"#000");
+  text(ctx,"FILM "+G.loaded+"/3"+(G.film?"   "+G.film+" SPARE":""),W-14,13,1,G.loaded?col:BLOOD,"r","#000");
+  if(G.reloadT>0){ px(ctx,"#1c1a17",W/2-30,36,60,3); px(ctx,FLAME,W/2-30,36,Math.round(60*(1-G.reloadT/1.2)),3); text(ctx,"LOADING",W/2,42,1,INK2,"c","#000"); }
+  const hint=touchMode()?"JOYSTICK: FILTER OR LOWER   USE: PHOTO   LOAD":K("left")+"/"+K("right")+" FILTER   "+K("use")+" PHOTO   "+K("reload")+" LOAD   "+K("up")+" LOWER";
+  text(ctx,hint,W/2,24,1,col,"c","#000"); // at the top, clear of messages
+  if(c.flash>0){ ctx.globalAlpha=Math.min(1,c.flash/0.3); px(ctx,"#fffbea",0,0,W,H); ctx.globalAlpha=1; }
+}
+function renderInv(){
+  px(ctx,"rgba(0,0,0,.85)",0,0,W,H);
+  uiFrame(ctx,12,8,W-24,H-16,INK3,"rgba(5,5,5,.96)","#1c1a17");
+  text(ctx,"BAG",W/2,14,1,INK,"c"); px(ctx,"#2a2622",24,24,W-48,1);
+  const items=invItems(), gx=24, gy=32, sz=28, gap=4; G.invSel=clamp(G.invSel,0,11); G.invHits=[]; G.invUseHit=null;
+  for(let i=0;i<12;i++){
+    const x=gx+(i%4)*(sz+gap), y=gy+Math.floor(i/4)*(sz+gap), id=items[i], on=i===G.invSel;
+    uiFrame(ctx,x,y,sz,sz,on?FLAME:"#2a2622",on?"#1a1208":"#0b0a09");
+    if(id){ drawIcon(ctx,id,x+2,y+2,24); const n=ITEMS[id].n(); if(n>1) text(ctx,String(n),x+sz-3,y+sz-9,1,INK,"r","#000"); }
+    G.invHits.push({i,x,y,w:sz,h:sz});
+  }
+  const id=items[G.invSel], rx=gx+4*(sz+gap)+10, rw=W-24-rx;
+  if(id){ const it=ITEMS[id];
+    text(ctx,it.name,rx,gy,1,FLAME);
+    wrapText(it.desc,Math.floor(rw/6)).forEach((l,i)=>text(ctx,l,rx,gy+14+i*10,1,INK2));
+    if(it.use){ const lab=id==="camera"&&G.cam?"LOWER":it.verb; menuRow(lab,rx+38,gy+82,true,performance.now()-(G.invPressT||0)<130,70); G.invUseHit={x:rx+3,y:gy+80,w:70,h:11}; }
+  } else text(ctx,items.length?"":"THE BAG IS EMPTY.",rx,gy,1,INK3);
+  if(G.invMsg) text(ctx,G.invMsg,W/2,H-32,1,BLOOD,"c");
+  text(ctx,touchMode()?"JOYSTICK: CHOOSE   USE: USE   BAG: CLOSE":"ARROWS: CHOOSE   "+K("use")+": USE   "+K("inventory")+": CLOSE",W/2,H-20,1,INK3,"c");
+}
+function uiKey(code){
+  if(G.ui==="inv"){
+    if(code==="Tab"||code==="Escape"){G.ui=null;return;}
+    const mv={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-4,ArrowUp:-4,KeyS:4,ArrowDown:4}[code];
+    if(mv){G.invSel=clamp(G.invSel+mv,0,11); G.invMsg=""; sfx.click(); return;}
+    if(code==="Space"||code==="Enter"){ const id=invItems()[G.invSel]; G.invPressT=performance.now();
+      if(!id) return; const it=ITEMS[id]; if(!it.use){G.invMsg="NOTHING TO DO WITH IT RIGHT NOW."; return;}
+      const msg=it.use(); if(msg){G.invMsg=msg; sfx.click();} else G.ui=null; }
+    return;
+  }
+  if(G.ui==="journal"){
+    if(code==="KeyB"||code==="Escape"){G.ui=null;return;}
+    const n=journalEntries().length;
+    if(code==="KeyW"||code==="ArrowUp"){G.jSel=(G.jSel+n-1)%n; sfx.click();}
+    if(code==="KeyS"||code==="ArrowDown"){G.jSel=(G.jSel+1)%n; sfx.click();}
+  }
+}
+function uiTap(x,y){
+  if(G.ui==="inv"){
+    const h=(G.invHits||[]).find(h=>x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h);
+    if(h){ if(h.i===G.invSel) uiKey("Space"); else {G.invSel=h.i; G.invMsg=""; sfx.click();} return; }
+    const u=G.invUseHit; if(u&&x>=u.x&&x<u.x+u.w&&y>=u.y-2&&y<u.y+u.h) uiKey("Space");
+    return;
+  }
+  const h=(G.jHits||[]).find(h=>x<158&&y>=h.y0&&y<h.y1); if(h){G.jSel=h.i; sfx.click();}
+}
+// ---------- the journal: one page per creature, plus the notes ----------
+const EA=typeof ENEMY_ART!=="undefined"?ENEMY_ART:null;
+const BESTIARY=[
+  {id:"moth",name:"THE MOTH",desc:"IT WANTS YOUR LIGHT. A BRIGHT LANTERN CALLS IT. A SMALL ONE KEEPS IT GUESSING.",sz:32,draw:(g,t)=>drawMoth(g,16,16,t)},
+  {id:"listener",name:"THE LISTENER",desc:"IT CANNOT SEE YOU. IT HEARS YOU. RUNNING, GLASS AND GEARS ALL CARRY.",sz:32,draw:(g,t)=>drawListener(g,16,30,t,false)},
+  {id:"roughneck",name:"THE ROUGHNECK",desc:"A DRILL HAND, ON ALL FOURS NOW. IT CHASES ANYTHING THAT MOVES. STAND STILL.",sz:32,draw:(g,t)=>EA&&EA.roughneckDown(g,16,30,Math.floor(t*4)%3)},
+  {id:"tarling",name:"THE TARLING",desc:"A PUDDLE THAT WATCHES. THE MORE BLACK ON YOU, THE BETTER IT FINDS YOU.",sz:32,draw:(g,t)=>EA&&EA.tarlingAttack(g,16,30,1)},
+  {id:"knocker",name:"THE KNOCKER",desc:"WORKERS AND PIPE, GROWN TOGETHER. IT REACHES FROM BROKEN PIPES. TURN THE RED VALVES.",sz:64,draw:(g,t)=>EA&&EA.knockerReach(g,42,40,2,"rust")},
+  {id:"smother",name:"THE SMOTHER",desc:"A DARKNESS THAT EATS LIGHT. PUT YOUR LANTERN OUT AND DO NOT MOVE.",sz:64,draw:(g,t)=>EA&&EA.smother(g,32,60,Math.floor(t*3))},
+  {id:"tenant",name:"THE TENANT",desc:"IT LIVES IN ONE LOCKER. A CRACKED DOOR, EYES, FLIES. CHOOSE ANOTHER ONE.",sz:64,draw:(g,t)=>{if(EA){EA.tenantOpenLocker(g,24,20); EA.tenantFigure(g,24,20,true);}}},
+  {id:"firedamp",name:"FIREDAMP",desc:"MINE GAS WITH SOMEONE INSIDE. OPEN FLAME SETS IT OFF. GO DIM TO PASS.",sz:64,draw:(g,t)=>EA&&EA.firedampDrift(g,32,46,t)},
+  {id:"timekeeper",name:"THE TIMEKEEPER",desc:"THE SHIFT BOSS STILL KEEPS TIME. STAY IN ONE ROOM TOO LONG AND HE CLOCKS YOU IN.",sz:32,draw:(g,t)=>EA&&EA.timekeeperDown(g,16,30,Math.floor(t*4)%3)}
+];
+function journalSeen(id){
+  const J=G.save.journal; if(J.seen.includes(id)) return;
+  J.seen.push(id); writeSave(G.save);
+  tell("NEW JOURNAL PAGE: "+BESTIARY.find(b=>b.id===id).name+".   "+K("journal")+" TO READ.");
+}
+function journalPhoto(id){
+  journalSeen(id);
+  const J=G.save.journal; if(J.photos.includes(id)) return;
+  J.photos.push(id); writeSave(G.save);
+  tell(J.photos.length>=JIDS.length?"THE JOURNAL IS COMPLETE. A NEW LANTERN WAITS.":"PHOTO OF "+BESTIARY.find(b=>b.id===id).name+" ADDED TO THE JOURNAL.");
+}
+function journalEntries(){
+  const s=G.save, J=s.journal;
+  return [...BESTIARY.map(b=>({kind:"enemy",b,seen:J.seen.includes(b.id),photo:J.photos.includes(b.id)})),
+          ...NOTES.map((t,i)=>({kind:"note",i,found:s.notes.includes(i)}))];
+}
+const jpC=mk(64,64), jpG=jpC.getContext("2d");
+function bestiaryPic(b,x,y,shadow){
+  jpG.clearRect(0,0,64,64); b.draw(jpG,titleT);
+  if(shadow){ jpG.globalCompositeOperation="source-atop"; jpG.fillStyle="#0b0a09"; jpG.fillRect(0,0,64,64); jpG.globalCompositeOperation="source-over"; }
+  ctx.imageSmoothingEnabled=false; ctx.drawImage(jpC,0,0,b.sz,b.sz,x,y,64,64);
+}
+function renderJournal(){
+  px(ctx,"rgba(0,0,0,.85)",0,0,W,H);
+  const E=journalEntries(); G.jSel=clamp(G.jSel,0,E.length-1);
+  for(const x of [10,162]) uiFrame(ctx,x,6,148,H-12,"#3a3026","#141008","#2a2014");
+  text(ctx,"JOURNAL",84,12,1,FLAME,"c");
+  const rows=14, start=clamp(G.jSel-7,0,Math.max(0,E.length-rows)); G.jHits=[];
+  for(let k=0;k<rows&&start+k<E.length;k++){
+    const i=start+k, e=E[i], y=26+k*10, on=i===G.jSel;
+    const label=e.kind==="enemy"?(e.seen?e.b.name:"???"):(e.found?"NOTE "+(e.i+1):"NOTE ???");
+    if(on){ px(ctx,"#2a1d0e",16,y-2,136,10); px(ctx,FLAME,16,y-2,1,10); }
+    text(ctx,label,20,y,1,on?FLAME:(e.kind==="enemy"?(e.seen?INK:INK3):(e.found?"#cfc6a8":INK3)));
+    if(e.kind==="enemy"&&e.photo){ px(ctx,INK2,143,y+1,6,5); px(ctx,"#141008",145,y+2,2,2); }
+    G.jHits.push({i,y0:y-2,y1:y+8});
+  }
+  const J=G.save.journal;
+  text(ctx,"PAGES "+J.seen.length+"/"+JIDS.length+"   PHOTOS "+J.photos.length+"/"+JIDS.length,84,H-20,1,INK3,"c");
+  const e=E[G.jSel], rx=170, cx=rx+66;
+  if(e.kind==="enemy"){
+    uiFrame(ctx,cx-34,12,68,68,"#3a3026","#2e2a24"); // dim floor colour, so dark creatures still show
+    if(e.seen) bestiaryPic(e.b,cx-32,14,!e.photo); else text(ctx,"?",cx,36,3,INK3,"c");
+    text(ctx,e.seen?e.b.name:"???",cx,86,1,e.seen?FLAME:INK3,"c");
+    wrapText(e.seen?e.b.desc:"YOU HAVEN'T MET THIS ONE. YET.",21).forEach((l,i)=>text(ctx,l,rx,100+i*10,1,INK2));
+    if(e.seen) text(ctx,e.photo?"PHOTO TAKEN":"NO PHOTO YET",cx,H-30,1,e.photo?COLD:INK3,"c");
+  } else {
+    text(ctx,e.found?"NOTE "+(e.i+1):"NOTE ???",cx,14,1,FLAME,"c");
+    wrapText(e.found?NOTES[e.i]:"NOT FOUND YET.",21).forEach((l,i)=>text(ctx,l,rx,30+i*10,1,e.found?"#cfc6a8":INK3));
+  }
+  text(ctx,(touchMode()?"BOOK":K("journal"))+": CLOSE",cx,H-20,1,INK3,"c");
 }
 
 /* ================= keys: every action can be rebound ================= */
@@ -2066,7 +2315,7 @@ const KEY_NAMES={Space:"SPACE",Escape:"ESC",Enter:"ENTER",Tab:"TAB",Backspace:"B
   ControlLeft:"L CTRL",ControlRight:"R CTRL",AltLeft:"L ALT",AltRight:"R ALT",ArrowUp:"UP",ArrowDown:"DOWN",ArrowLeft:"LEFT",ArrowRight:"RIGHT"};
 function keyName(c){ let m; if(KEY_NAMES[c]) return KEY_NAMES[c]; if((m=/^Key([A-Z])$/.exec(c))) return m[1]; if((m=/^Digit(\d)$/.exec(c))) return m[1];
   if((m=/^Numpad(\d)$/.exec(c))) return "NUM "+m[1]; return c.toUpperCase().replace(/[^A-Z0-9 ]/g,"").slice(0,10); }
-const TOUCH_NAMES={up:"JOYSTICK",down:"JOYSTICK",left:"JOYSTICK",right:"JOYSTICK",run:"RUN",dim:"LANTERN DOWN",bright:"LANTERN UP",pour:"POUR",use:"USE",inventory:"INVENTORY",journal:"JOURNAL",reload:"RELOAD",pause:"PAUSE"};
+const TOUCH_NAMES={up:"JOYSTICK",down:"JOYSTICK",left:"JOYSTICK",right:"JOYSTICK",run:"RUN",dim:"LANTERN DOWN",bright:"LANTERN UP",pour:"POUR",use:"USE",inventory:"BAG",journal:"BOOK",reload:"LOAD",pause:"PAUSE"};
 function K(id){ return touchMode()?TOUCH_NAMES[id]:keyName(BINDS[id][0]); }
 function moveKeys(){ const k=["up","left","down","right"].map(K); return k.every(x=>x.length===1)?k.join(""):k.join("/"); }
 let subMenu=null, keysNotice="", capture=null;
@@ -2093,7 +2342,7 @@ function renderKeys(){
 // Real keys are turned into the game's own action codes here, so the rest of the game never sees a rebinding.
 function onRawKey(e){
   if(capture){ e.preventDefault(); if(!e.repeat) bindKey(e.code); return; }
-  const c=canon(e.code), menu=mode!=="play"||!!subMenu||!!(G&&G.dlg);
+  const c=canon(e.code), menu=mode!=="play"||!!subMenu||!!(G&&(G.dlg||G.ui));
   const code=menu&&MENU_KEYS.has(e.code)?e.code:c;
   if(!code) return;
   e.preventDefault();
@@ -2125,16 +2374,21 @@ function onKeyDown(e){
   if(mode==="pause"&&settingsOpen){ if(e.code==="Escape") settingsOpen=false; else menuKey(setMenu,e.code); return; }
   if(mode==="pause"){ if(!pauseMenu.confirm&&(e.code==="Escape"||e.code==="KeyP")) togglePause(); else menuKey(pauseMenu,e.code); return; }
   if(mode==="play"&&G.dlg&&G.introPanel!=null&&e.code==="Escape"){G.dlg=null;introDone();return;}
+  if(mode==="play"&&G.ui){uiKey(e.code);return;}
   if(e.code==="Escape"||e.code==="KeyP"){togglePause();return;}
   if(mode!=="play"||G.dying||G.slide) return;
   if(G.dlg){dialogKey(e.code);return;}
   if(G.sit||G.exitSeq) return;
+  if(e.code==="Tab"){G.ui="inv"; G.invMsg=""; sfx.click(); return;}
+  if(e.code==="KeyB"){G.ui="journal"; sfx.click(); return;}
+  if(e.code==="KeyR"){reloadFilm(); return;}
+  if(G.cam&&camKey(e.code)) return;
   if(e.code==="Space"||e.code==="Enter"){const it=nearestThing(); if(it) it.fn(); return;}
   if(e.code==="KeyQ"||e.code==="KeyE"){
     const nl=clamp(G.level+(e.code==="KeyE"?1:-1),0,3);
     if(nl!==G.level){G.level=nl;sfx.click();noise(G.p.x,G.p.y,0.1);}
   }
-  if(e.code==="KeyF"&&G.flasks>0&&G.pouring<=0&&G.fuel<100){G.pouring=0.9;sfx.pour();noise(G.p.x,G.p.y,0.3);}
+  if(e.code==="KeyF") pourOil();
 }
 window.addEventListener("keydown",onRawKey);
 window.addEventListener("keyup",onRawUp);
@@ -2142,6 +2396,7 @@ window.addEventListener("blur",()=>{keys.clear(); if(mode==="play") togglePause(
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&mode==="play") togglePause();});
 // a tap or click on the picture: menu rows, dialogue choices, or "next"
 function tapAt(x,y){
+  if(mode==="play"&&G&&G.ui&&!subMenu){uiTap(x,y);return;}
   if(mode==="end"&&!subMenu){ if(titleT>0.8) begin(); return; }
   if(capture) return;
   const m=subMenu||(settingsOpen?setMenu:mode==="title"?titleMenu:mode==="pause"?pauseMenu:null);
@@ -2166,6 +2421,12 @@ addEventListener("contextmenu",e=>e.preventDefault());
 
 /* ================= sizing and loop ================= */
 const wrap=document.getElementById("wrap");
+pl.addEventListener("click",e=>{
+  if(mode!=="play"||!G||G.dlg||G.ui||G.dying) return;
+  const r=pl.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*PW, y=(e.clientY-r.top)/r.height*H;
+  const q=quickHits.find(q=>x>=q.x-1&&x<=q.x+q.w+1&&y>=q.y-1&&y<=q.y+q.h+4);
+  if(q&&ITEMS[q.id].n()>0){ const msg=ITEMS[q.id].use(); if(msg) tell(msg); }
+});
 // The room keeps its 320 x 192 grid; side panels fill the extra width, never less than slim strips.
 function fit(){
   const iw=innerWidth, ih=innerHeight, s=Math.min(ih/H, iw/(W+2*PMIN)), k=s>=2?Math.floor(s):s;
@@ -2236,6 +2497,7 @@ function loop(now){
   update(dt); render();
   if(mode==="play"&&!G.dying){ playSecs+=dt; if(now>playFlushAt){ playFlushAt=now+30000; flushPlaytime(); } }
   if(mode!==shownMode){ if(shownMode==="play") flushPlaytime(); shownMode=mode; document.body.dataset.mode=mode; }
+  const camUp=G&&G.cam?"1":""; if(document.body.dataset.cam!==camUp) document.body.dataset.cam=camUp;
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -2271,6 +2533,12 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
     console.assert(cleanSave(good.data).notes.length===2&&!cleanSave(good.data).endings.fake,"save cleaned");
     console.assert(!applyPayload({game:"other",v:1,data:{}})&&!applyPayload(null)&&!applyPayload({game:"last-light",v:1,data:[1]}),"bad saves refused");
     console.assert(ENDING_IDS.length===18,"18 endings");
+    for(let i=0;i<n;i++){ const m=genMap(3000+i), bp=m.rooms.filter(r=>r.item&&r.item.kind==="blueprint");
+      console.assert(bp.length===1&&bp[0].dist<=3,"blueprint within 3 rooms of the start");
+      console.assert(m.rooms.filter(r=>r.item&&r.item.kind==="camera").length===1,"one camera"); }
+    const cj=cleanSave({journal:{seen:["moth","dragon","moth"],photos:["listener","moth",7]}}).journal;
+    console.assert(cj.seen.join()==="moth"&&cj.photos.join()==="moth","journal cleaned: known creatures, photos only of met ones");
+    console.assert(JIDS.length===BESTIARY.length&&BESTIARY.every(b=>JIDS.includes(b.id)),"every journal page has art");
     console.assert(cleanBinds({use:["KeyW"]})===null&&cleanBinds({pause:[]})===null&&cleanBinds({run:["<script>"]})===null,"bad key bindings refused");
     console.assert(cleanBinds(null).use[0]==="Space"&&canon("ArrowUp")!==undefined,"default key bindings");
     return "ok";
