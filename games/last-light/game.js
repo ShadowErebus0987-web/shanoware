@@ -402,12 +402,10 @@ function paintKind(g,r,rnd){
     }
   }
   if(k==="lockers"){
-    const ajar=2+Math.floor(rnd()*12);
     for(let tx=2;tx<=17;tx++){ if(tx>=8&&tx<=11) continue; const x=tx*T, y=T;
       px(g,"#2e3a36",x+1,y-6,14,22); px(g,"#1c2422",x+1,y-6,1,22); px(g,"#3e4c47",x+1,y-6,14,1);
       for(let i=0;i<3;i++) px(g,"#1c2422",x+4,y-3+i*2,8,1);
       px(g,"#6a6a60",x+12,y+5,1,3);
-      if(tx===ajar||tx===ajar+6){px(g,"#050505",x+3,y-4,10,18); px(g,"#8a7a5a",x+6,y+2); px(g,"#8a7a5a",x+9,y+2);} // something inside is looking out
     }
   }
   if(k==="pump"){
@@ -563,14 +561,16 @@ function lanternPos(fx,fy,dir){
   const L=LANTERN[dir]; return {x:Math.round(fx)-8+L[0], y:Math.round(fy)-SPR_H+1+L[1]};
 }
 
-function drawMoth(g,cx,cy,t){
+function drawMoth(g,cx,cy,t,v){ // v: 0 white, 1 black-and-white, 2 blood-stained
   cx=Math.round(cx); cy=Math.round(cy);
   const open=Math.sin(t*28)>0;
   const up=[7,8,8,7,5], lo=[6,6,5,3];
-  g.fillStyle="#a89f88";
+  g.fillStyle=v===1?"#2e2a24":"#a89f88";
   up.forEach((w,i)=>{w=open?w:Math.ceil(w/2);g.fillRect(cx-2-w,cy-4+i,w,1);g.fillRect(cx+2,cy-4+i,w,1);});
   lo.forEach((w,i)=>{w=open?w:Math.ceil(w/2);g.fillRect(cx-2-w,cy+1+i,w,1);g.fillRect(cx+2,cy+1+i,w,1);});
   if(open){px(g,"#3b352c",cx-7,cy-3,2,2);px(g,"#3b352c",cx+5,cy-3,2,2);px(g,"#d8cfb8",cx-7,cy-3);px(g,"#d8cfb8",cx+6,cy-3);}
+  if(open&&v===1) for(const [dx,dy] of [[-9,-2],[-6,0],[-9,2],[-5,3],[5,-2],[7,0],[8,2],[4,3]]) px(g,"#d8cfb8",cx+dx,cy+dy);
+  if(v===2){px(g,"#7a1a14",cx-6,cy-2,3,2); px(g,"#7a1a14",cx+4,cy+1,2,3); px(g,"#5a1410",cx-4,cy+2,2,2); px(g,"#7a1a14",cx,cy+1,1,3);}
   px(g,"#cfc6b0",cx-1,cy-4,3,9); px(g,"#cfc6b0",cx-1,cy-6,3,2);
   px(g,"#cfc6b0",cx-2,cy-8);px(g,"#cfc6b0",cx-3,cy-9);px(g,"#cfc6b0",cx+2,cy-8);px(g,"#cfc6b0",cx+3,cy-9);
   px(g,"#f6e7a6",cx-1,cy-6);px(g,"#f6e7a6",cx+1,cy-6);
@@ -637,6 +637,7 @@ function drawWhistle(g,x,y,t){
 
 function scareFace(kind){
   const c=mk(48,48), g=c.getContext("2d",{willReadFrequently:true});
+  if(FACE_ART[kind]){FACE_ART[kind](g,c); return c;}
   if(kind==="other"){ // your own face, wrong
     if(portraitImg.complete) g.drawImage(portraitImg,0,0,PN,PN,0,0,48,48);
     g.fillStyle="#000"; g.beginPath(); g.ellipse(30,23,5,4,0,0,7); g.ellipse(17,22,4,3,0,0,7); g.fill();
@@ -673,6 +674,59 @@ function scareFace(kind){
   }
   return c;
 }
+
+const ell=(g,x,y,rx,ry,c)=>{g.fillStyle=c; g.beginPath(); g.ellipse(x,y,rx,ry,0,0,7); g.fill();};
+const FACE_ART={
+  roughneck(g,c){ // hard hat, black veins, eyes that don't line up
+    ell(g,24,30,15,16,"#c2bcae"); ell(g,24,14,18,10,"#34312d"); ell(g,24,46,20,6,"#7a2a22"); crisp(c);
+    px(g,"#34312d",3,15,42,4); px(g,"#55504a",12,7,14,2); px(g,"#0e0d0c",31,6,2,9);
+    for(const [x,y] of [[10,22],[11,25],[12,28],[11,31],[37,22],[36,25],[37,28]]) px(g,"#3a1414",x,y,1,3);
+    px(g,"#e8e4dc",14,23,8,6); px(g,"#e8e4dc",27,23,8,6); px(g,"#1a0806",17,25,2,3); px(g,"#1a0806",31,24,2,3);
+    px(g,"#1a0806",15,33,19,9); for(let x=16;x<=31;x+=3){px(g,"#e8e4dc",x,33,2,3); px(g,"#e8e4dc",x+1,39,2,3);} px(g,"#4e1a15",21,42,1,5); px(g,"#4e1a15",27,42,1,4);
+  },
+  tarling(g,c){ // the puddle, risen, with a mouth opening in it
+    ell(g,24,25,23,21,"#1c1a24"); ell(g,24,25,21,19,"#060508"); ell(g,10,43,5,5,"#060508"); ell(g,36,44,4,4,"#060508"); ell(g,24,45,3,3,"#060508"); crisp(c);
+    for(const [x,y,w] of [[9,10,6],[30,8,8],[13,31,4],[33,29,3]]) px(g,"#1f2b2b",x,y,w,1);
+    for(const [x,y] of [[6,20],[40,18],[20,6],[28,40]]) px(g,"#3a2a4a",x,y,2,2);
+    px(g,"#9a9487",15,18,6,5); px(g,"#9a9487",28,18,6,5); px(g,"#cfc6b0",17,19,2,2); px(g,"#cfc6b0",30,19,2,2);
+    px(g,"#141220",17,29,15,8); px(g,"#060508",19,31,11,5);
+    for(let k=0;k<5;k++) px(g,"#060508",8+k*8,40,2,6+(k%3)*2);
+  },
+  knocker(g,c){ // a face in the mouth of the pipe, fingers over the rim
+    ell(g,24,24,22,22,"#4a3f33"); ell(g,24,24,17,17,"#0b0a09"); crisp(c);
+    px(g,"#6b5a46",8,5,32,2); px(g,"#2e2720",8,42,32,2); px(g,"#7a3a1f",4,21,3,6); px(g,"#7a3a1f",41,17,3,5);
+    px(g,"#c2bcae",15,12,18,23); px(g,"#9a9487",15,12,2,23); px(g,"#060508",18,18,4,5); px(g,"#060508",27,18,4,5);
+    px(g,"#1a0806",20,27,8,6); px(g,"#060508",21,28,6,4);
+    for(const x of [7,11,34,38]){px(g,"#9a9487",x,29,3,12); px(g,"#6e695f",x,34,3,1); px(g,"#060508",x,41,3,1);}
+  },
+  smother(g,c){ // all dark, your light being pulled into the middle of it
+    ell(g,24,24,23,23,"#060508"); crisp(c);
+    for(let a=0;a<6.28;a+=0.35){const r=21+Math.sin(a*5)*1.5; px(g,"#1c1a24",24+Math.round(Math.cos(a)*r),24+Math.round(Math.sin(a)*r),2,2);}
+    for(const [x,y] of [[8,12],[40,14],[10,38],[38,36],[24,4],[24,44]]){const dx=(24-x)/4, dy=(24-y)/4; for(let k=0;k<3;k++) px(g,k?"#a8401a":"#e8a94a",Math.round(x+dx*k),Math.round(y+dy*k));}
+    px(g,"#e8a94a",20,20,9,9); px(g,"#a8401a",19,21,1,7); px(g,"#a8401a",29,21,1,7); px(g,"#fff1c8",22,22,5,5); px(g,"#000",23,23,3,3);
+  },
+  tenant(g,c){ // the locker door, open a crack, and who is behind it
+    px(g,"#2e3a36",0,0,48,48); px(g,"#3e4c47",0,0,48,2); px(g,"#1c2422",0,0,2,48); px(g,"#050505",14,4,20,44);
+    ell(g,24,20,8,12,"#4a4744"); crisp(c);
+    px(g,"#2a2826",17,30,14,18); px(g,"#e8e4dc",20,17,2,2); px(g,"#e8e4dc",26,17,2,2); px(g,"#060508",22,25,5,1);
+    for(const y of [24,28,32]){px(g,"#9a9487",33,y,4,1); px(g,"#060508",37,y,1,1);}
+    for(let i=0;i<4;i++) px(g,"#1c2422",38,8+i*3,8,1); px(g,"#6a6a60",42,26,1,4);
+    for(const [x,y] of [[6,10],[9,30],[44,40],[40,4],[4,42]]) px(g,"#0b0a09",x,y,2,1);
+  },
+  firedamp(g,c){ // the gas, lit, and the miner in it
+    for(const [x,y,r] of [[14,18,12],[30,14,13],[24,28,15],[10,32,9],[38,32,9]]) ell(g,x,y,r,r*0.9,"#4a5a24");
+    for(const [x,y,r] of [[14,17,8],[30,13,9],[24,27,10]]) ell(g,x,y,r,r*0.9,"#8aa030"); crisp(c);
+    px(g,"#1e2414",17,13,14,17); px(g,"#1e2414",19,30,10,4); px(g,"#b8c84a",20,18,3,3); px(g,"#b8c84a",26,18,3,3); px(g,"#060508",22,25,5,2);
+    for(const [x,y] of [[6,8],[42,10],[4,26],[44,24],[12,42],[36,42],[24,3]]) px(g,"#f2c35a",x,y,2,1);
+  },
+  timekeeper(g,c){ // a clock for a face, nearly midnight, and something under the glass
+    ell(g,24,27,18,18,"#9a7a3a"); ell(g,24,27,15,15,"#e8e4dc"); ell(g,24,9,16,6,"#2a2826"); crisp(c);
+    px(g,"#2a2826",6,11,36,3); px(g,"#3e3a36",14,5,12,2);
+    for(let k=0;k<12;k++){const a=k/12*6.283, s=k%3?1:2; px(g,"#1a1814",24+Math.round(Math.cos(a)*12),27+Math.round(Math.sin(a)*12),s,s);}
+    for(let k=0;k<9;k++) px(g,"#1a1814",24,27-k); for(let k=0;k<6;k++) px(g,"#1a1814",24-k,27-Math.round(k*0.5));
+    px(g,"#060508",23,26,3,3); px(g,"#060508",17,35,15,3); for(let x=18;x<31;x+=3) px(g,"#e8e4dc",x,35,1,1);
+  }
+};
 
 /* ================= portrait: Shano's three Ash faces, 48 x 48 each ================= */
 const PN=48;
@@ -860,6 +914,16 @@ const sfx={
   sting(){tone({type:"sawtooth",f0:58,f1:52,dur:1.4,gain:0.12,lp:300,attack:0.01});tone({type:"sine",f0:1244,f1:1180,dur:0.9,gain:0.03,attack:0.2});},
   slam(){nz({dur:0.5,freq:180,type:"lowpass",gain:0.4,attack:0.002});tone({f0:90,f1:40,dur:0.4,gain:0.3});},
   clank(){nz({dur:0.25,freq:1400,q:5,gain:0.18});tone({type:"square",f0:110,f1:90,dur:0.3,gain:0.06,lp:600});},
+  growl(x){tone({type:"sawtooth",f0:90,f1:70,dur:0.6,gain:0.1,lp:500,pan:panOf(x)}); nz({dur:0.5,freq:300,q:1,gain:0.06,pan:panOf(x)});},
+  scrape(x){nz({dur:0.35,freq:1800,f1:900,q:4,gain:0.035,pan:panOf(x)});},
+  squelch(x){nz({dur:0.25,freq:300,f1:120,q:3,gain:0.1,pan:panOf(x)}); tone({f0:120,f1:60,dur:0.2,gain:0.06,pan:panOf(x)});},
+  knock(x){tone({type:"square",f0:140,f1:110,dur:0.08,gain:0.12,lp:900,pan:panOf(x)}); tone({type:"square",f0:140,f1:110,dur:0.08,gain:0.12,lp:900,pan:panOf(x),delay:0.18});},
+  hum(x){tone({f0:48,f1:44,dur:2.2,gain:0.12,attack:0.5,pan:panOf(x)}); nz({dur:2,freq:120,type:"lowpass",gain:0.05,attack:0.5});},
+  hiss(x){nz({dur:0.6,freq:4500,q:0.8,gain:0.05,pan:panOf(x),attack:0.05});},
+  boom(){nz({dur:1.4,freq:180,type:"lowpass",gain:0.6,attack:0.003}); tone({f0:70,f1:28,dur:1.2,gain:0.4});},
+  tick(){nz({dur:0.03,freq:3600,q:10,gain:0.07});},
+  chime(){tone({type:"triangle",f0:523,dur:1.2,gain:0.06}); tone({type:"triangle",f0:415,dur:1.2,gain:0.06,delay:0.35});},
+  gasp(){nz({dur:0.5,freq:1400,f1:600,q:1.5,gain:0.12,attack:0.02});},
   squeal(x){tone({type:"square",f0:2400,f1:3100,dur:0.09,gain:0.025,pan:panOf(x)}); tone({type:"square",f0:2900,f1:2200,dur:0.12,gain:0.025,pan:panOf(x),delay:0.11});},
   valve(x){tone({type:"sawtooth",f0:420,f1:370,dur:0.45,gain:0.05,lp:1800,pan:panOf(x)}); nz({dur:0.4,freq:2600,q:6,gain:0.04,pan:panOf(x)});},
   crate(x){nz({dur:0.25,freq:420,q:2,gain:0.12,pan:panOf(x)}); tone({type:"triangle",f0:180,f1:120,dur:0.2,gain:0.05});},
@@ -986,7 +1050,7 @@ function newGame(){
     p:{x:160,y:104,dir:"d",step:false,stepT:0,moving:false},
     level:2, fuel:100, flasks:1, pouring:0,
     sludge:0, darkT:0, painT:0, growing:false,
-    moth:{kind:"moth",room:mothRoom,inRoom:false,x:0,y:0,interest:0,moveT:10,leaveT:0,safeT:0,wx:160,wy:96,wT:0,exitDir:null},
+    moth:{kind:"moth",v:0,room:mothRoom,inRoom:false,x:0,y:0,interest:0,moveT:10,leaveT:0,safeT:0,wx:160,wy:96,wT:0,exitDir:null},
     lis:{kind:"lis",room:lisRoom,inRoom:false,x:0,y:0,state:"wander",target:null,moveT:8,tx:0,ty:0,listenT:0,stunT:0,safeT:0,wx:160,wy:96,wT:0,idleT:0,exitDir:null,clickT:1},
     hitCool:0, heartT:0, shake:0, scare:null, slide:null, dying:null,
     distCur:null, exitSeen:false, toasts:{}, drips:[], motes:[], visitedCount:1,
@@ -999,6 +1063,10 @@ function newGame(){
   const lid=G.save.lantern; G.lan=LANTERNS.find(l=>l.id===lid&&l.has(Object.assign({endings:{}},G.save)))||LANTERNS[0];
   G.save.met=G.save.met||{}; G.save.endings=G.save.endings||{}; G.save.notes=G.save.notes||[];
   G.room.visited=true; G.toasts["z_"+G.room.zone]=1;
+  // the Moth and the Listener every night, plus three or four of the infected; up to two more Moths later on
+  G.moths=[G.moth]; G.mothPlan=[{at:300+Math.random()*180,v:1},{at:660+Math.random()*240,v:2}].filter((x,i)=>Math.random()<(i?0.45:0.65));
+  G.roster=EA?shuffled(FOES,Math.random).slice(0,Math.random()<0.5?3:4):[]; G.foes=[]; G.foes=placeFoes();
+  G.roomT=0; G.tickT=0; G.graceIn=0; G.hide=null; G.struggle=null;
   G.distCur=bfs(rooms,G.room);
 }
 
@@ -1057,8 +1125,8 @@ function agg(e){return 1+G.elapsed/TIME_LIMIT*1.6+(e&&e.bonus||0)+(G.blackShift?
 function lightOn(){return G.fuel>0&&G.level>0&&!G.dying&&!G.sit&&!(G.exitSeq&&G.exitSeq.type==="drain");}
 function lightRadius(){return lightOn()?RADIUS[G.level]*G.lan.radius:0;}
 
-function updateMoth(dt){
-  const m=G.moth, a=agg(m), on=lightOn();
+function updateMoth(dt,m){
+  m=m||G.moth; const a=agg(m), on=lightOn();
   if(m.gone||m.calm) return;
   m.flashT=Math.max(0,(m.flashT||0)-dt);
   if(!m.inRoom){
@@ -1069,15 +1137,20 @@ function updateMoth(dt){
     if(m.moveT<=0){
       m.moveT=G.elapsed<GRACE?14:(m.interest>=55?Math.max(3,9/a):14);
       const next=(G.elapsed>=GRACE&&m.interest>=55)?nextRoomToward(m.room,G.room):m.room.neighbors[Math.floor(Math.random()*m.room.neighbors.length)];
-      if(next) moveAbstract(m,next);
+      if(next&&!(next===G.room&&smotherHere())) moveAbstract(m,next);
     }
     return;
   }
   m.safeT=Math.max(0,m.safeT-dt);
+  if(smotherHere()&&!m.exitDir){ // it will not share a room with the thing that eats light
+    const sm=foesHere().find(f=>f.k==="smother"); let far=null,fd=-1;
+    for(const k of Object.keys(G.room.nb)){const dd=dist(DOOR[k].x,DOOR[k].y,sm.x,sm.y); if(dd>fd){fd=dd;far=k;}}
+    m.interest=0; leaveVia(m,far);
+  }
   const L=lanternPos(G.p.x,G.p.y,G.p.dir);
   const d=dist(m.x,m.y,L.x,L.y);
   if(m.exitDir){stepConcreteExit(m,40,dt);return;}
-  const sees=on&&(G.level>1||d<70);
+  const sees=on&&!G.hide&&(G.level>1||d<70);
   let tx,ty,sp;
   const fl=G.flare&&G.flare.room===G.room?G.flare:null;
   if(fl){tx=fl.x;ty=fl.y-8;sp=Math.min(95,40*a);m.leaveT=0;}                                  // it would rather have the flare
@@ -1092,7 +1165,7 @@ function updateMoth(dt){
   const wob=Math.sin(G.elapsed*7+m.x*0.05)*0.6;
   m.x+=(dx/len-dy/len*wob)*sp*dt; m.y+=(dy/len+dx/len*wob)*sp*dt;
   m.x=clamp(m.x,10,W-10); m.y=clamp(m.y,12,H-10);
-  if(on&&m.safeT<=0&&d<9&&!fl) die("moth"); // while it chases a flare it ignores Ash
+  if(on&&!G.hide&&m.safeT<=0&&d<9&&!fl) die("moth"); // while it chases a flare it ignores Ash
 }
 
 function updateListener(dt){
@@ -1129,23 +1202,323 @@ function updateListener(dt){
     const blocked=moveBox(G.room,e,dx/len*sp*dt,dy/len*sp*dt,3,2);
     if(blocked) moveBox(G.room,e,(-dy/len)*sp*dt,(dx/len)*sp*dt,3,2); // slide round the obstacle
   }
-  if(e.safeT<=0&&G.hitCool<=0&&dist(e.x,e.y,G.p.x,G.p.y)<10){
+  if(e.safeT<=0&&G.hitCool<=0&&!G.hide&&dist(e.x,e.y,G.p.x,G.p.y)<10){
     scare("lis"); G.sludge=clamp(G.sludge+40,0,100); G.hitCool=3;
     e.state="stun"; e.stunT=1.2;
     if(G.sludge>=100) die("dark");
   }
 }
 
+/* ================= the infected: seven new kinds, art from enemies.js ================= */
+const FOES=["roughneck","tarling","knocker","smother","tenant","firedamp","timekeeper"];
+const INSTANT=["moth","roughneck","knocker","tenant","firedamp"]; // killed outright rather than drowned in the black
+const SHAKE={roughneck:7,tarling:5,knocker:9,smother:4,tenant:9,firedamp:12,timekeeper:5};
+const night=()=>clamp(G.elapsed/TIME_LIMIT,0,1);
+const anyOf=a=>a[Math.floor(Math.random()*a.length)];
+const foesHere=()=>G.foes.filter(f=>f.room===G.room&&!f.gone);
+const mothsHere=()=>G.moths.filter(m=>m.inRoom&&!m.gone);
+const smotherHere=()=>foesHere().some(f=>f.k==="smother"&&f.state!=="leave");
+const canCatch=()=>!G.hide&&!G.dying&&!G.struggle&&!G.exitSeq&&G.hitCool<=0&&G.graceIn<=0;
+function newMoth(v,room){ return {kind:"moth",v,room,inRoom:false,x:0,y:0,interest:0,moveT:10,leaveT:0,safeT:0,wx:160,wy:96,wT:0,exitDir:null}; }
+function farSpot(r){ let best=[160,96],bd=-1; for(let k=0;k<12;k++){const [x,y]=freeSpot(r,Math.random), d=dist(x*T+8,y*T+10,G.p.x,G.p.y); if(d>bd){bd=d; best=[x*T+8,y*T+10];}} return best; }
+function makeFoe(k,r,x,y){
+  const f={k,room:r,state:"idle",t:Math.random()*9,st:0,cool:0,warn:0,lost:0,wT:0,dir:1,face:"s"};
+  if(x===undefined){const [tx,ty]=freeSpot(r,Math.random); x=tx*T+8; y=ty*T+10;}
+  f.x=f.tx=x; f.y=f.ty=y;
+  if(k==="roughneck") f.v=anyOf(Object.keys(EA.ROUGHNECK_VARIANTS)); // several a night, each its own colour
+  if(k==="knocker"){f.v=anyOf(Object.keys(EA.KNOCKER_VARIANTS)); f.x=r.brokenX+5; f.y=30; f.state="hidden"; f.knockT=0;}
+  if(k==="tarling") f.state="hide";
+  if(k==="tenant"){const busy=G.foes.filter(o=>o.room===r&&o.k==="tenant").map(o=>o.lx); f.lx=anyOf([2,3,4,5,6,7,12,13,14,15,16,17].filter(x=>!busy.includes(x)&&!isSolid(r.tiles[2*RW+x]))); f.x=f.lx*T+8; f.y=T+20; f.rat=1+Math.random()*3; f.shake=0;}
+  if(k==="smother"){f.state="drift"; f.fade=0; f.hum=0;}
+  if(k==="firedamp") f.state="drift";
+  if(k==="timekeeper") f.state="clockin";
+  return f;
+}
+// Where tonight's kinds wait. One at most per room, and most rooms stay empty.
+function placeFoes(){
+  const R=G.roster, out=[];
+  for(const r of G.rooms){
+    if(r===G.map.start||r.special||r.dist<2) continue;
+    if(R.includes("knocker")&&r.broken&&Math.random()<0.7){out.push(makeFoe("knocker",r)); continue;}
+    if(R.includes("tenant")&&r.kind==="lockers"&&Math.random()<0.6){r.tenants=1; out.push(makeFoe("tenant",r)); continue;}
+    const w=shuffled([["roughneck",["barracks","drill","boiler"].includes(r.zone)?0.13:0.07],["tarling",r.zone==="sump"||r.zone==="pump"||r.kind==="flooded"?0.14:0.05],
+      ["firedamp",r.exitT?0:["drill","pump","sump"].includes(r.zone)?0.1:0.04],["smother",0.025]].filter(([k])=>R.includes(k)),Math.random);
+    for(const [k,p] of w) if(Math.random()<p){out.push(makeFoe(k,r)); break;}
+  }
+  return out;
+}
+function foesOnEnter(r){
+  G.roomT=0; G.graceIn=1.2; G.tickT=0;
+  G.foes=G.foes.filter(f=>f.k!=="timekeeper"); // he never follows you out
+  for(const f of G.foes) if(f.room===r&&!f.gone){
+    if(["roughneck","tarling","firedamp","smother"].includes(f.k)){[f.x,f.y]=farSpot(r); f.tx=f.x; f.ty=f.y;}
+    if(f.k==="roughneck") f.state="idle"; if(f.k==="tarling") f.state="hide";
+  }
+  if(r===G.map.start||r.special) return;
+  const here=G.foes.filter(f=>f.room===r&&!f.gone);
+  if(G.roster.includes("smother")&&!here.length&&G.elapsed>840&&Math.random()<(G.elapsed>1020?0.3:0.14)){const [x,y]=farSpot(r); G.foes.push(makeFoe("smother",r,x,y));} // the last minutes
+  if(G.roster.includes("tenant")&&r.kind==="lockers"){ // more lockers taken as the night goes on
+    const want=(r.tenants||0)+(G.elapsed>600?1:0)+(G.elapsed>900?1:0);
+    for(let n=here.filter(f=>f.k==="tenant").length;n<want;n++) G.foes.push(makeFoe("tenant",r));
+  }
+}
+function los(x0,y0,x1,y1){ const n=Math.ceil(dist(x0,y0,x1,y1)/6); for(let i=1;i<n;i++){const v=tileAt(G.room,x0+(x1-x0)*i/n,y0+(y1-y0)*i/n); if(v===1||v===2||v===3||v===6||v===7) return false;} return true; }
+function moveFoe(f,tx,ty,sp,dt,free){
+  const dx=tx-f.x, dy=ty-f.y, len=Math.hypot(dx,dy); f.moving=len>2&&sp>0;
+  if(!f.moving) return len;
+  const k=Math.min(len,sp*dt)/len, mx=dx*k, my=dy*k;
+  if(Math.abs(dx)>0.5) f.dir=dx<0?-1:1;
+  f.face=Math.abs(dy)>Math.abs(dx)*1.2?(dy>0?"d":"u"):"s";
+  if(free){f.x=clamp(f.x+mx,T+6,W-T-6); f.y=clamp(f.y+my,T+12,H-T);}
+  else if(moveBox(G.room,f,mx,my,4,2)) moveBox(G.room,f,-my,mx,4,2); // slide round what is in the way
+  return len;
+}
+function hurt(k,amt){ scare(k); G.sludge=clamp(G.sludge+amt,0,100); G.hitCool=3; if(G.sludge>=100) die(k); }
+function foeSeen(f){
+  const p=G.p, d=dist(f.x,f.y,p.x,p.y), L=lanternPos(p.x,p.y,p.dir);
+  if(f.k==="knocker") return !G.sealed[f.room.zone]&&d<90;
+  if(f.k==="tenant") return d<70;
+  if(f.k==="tarling"&&f.state==="hide") return d<40;
+  return f.k==="smother"||f.k==="firedamp"||d<70||(lightOn()&&dist(f.x,f.y-8,L.x,L.y)<lightRadius()+10);
+}
+function threatNear(r){
+  const p=G.p, near=(x,y)=>dist(x,y,p.x,p.y)<r, l=G.lis;
+  return mothsHere().some(m=>!m.calm&&near(m.x,m.y))||(l.inRoom&&!l.gone&&!l.calm&&near(l.x,l.y))||foesHere().some(f=>f.k!=="tenant"&&f.k!=="knocker"&&near(f.x,f.y));
+}
+function lightEaten(){ let k=1; for(const f of foesHere()) if(f.k==="smother"&&f.state!=="leave") k=Math.min(k,clamp(dist(f.x,f.y-22,G.p.x,G.p.y-14)/130,0.35,1)); return k; }
+function updFoes(dt){
+  G.graceIn=Math.max(0,G.graceIn-dt);
+  updClock(dt);
+  for(const f of foesHere()){ f.t+=dt; FOE[f.k].upd(f,dt); if(!f.seen&&!G.dying&&foeSeen(f)){f.seen=true; journalSeen(f.k);} }
+  if(G.hide){ G.hide.breath=clamp(G.hide.breath+(threatNear(72)?-dt/5:dt/2.5),0,1); if(G.hide.breath<=0) endHide(true); }
+  // more wings in the dark: up to three Moths a night
+  if(G.mothPlan.length&&G.elapsed>=G.mothPlan[0].at){
+    const pl=G.mothPlan.shift(), far=G.rooms.filter(r=>G.distCur[r.id]>=4&&!r.special);
+    if(far.length){G.moths.push(newMoth(pl.v,anyOf(far))); sfx.whisper(0); tell("MORE WINGS. SOMEWHERE IN THE DARK.");}
+  }
+}
+// The Timekeeper: stay in one room too long and he clocks you in. The limit shortens over the night.
+function updClock(dt){
+  if(!G.roster.includes("timekeeper")||G.room.special||G.elapsed<GRACE||foesHere().some(f=>f.k==="timekeeper")) return;
+  const lim=75-40*night(); G.roomT+=dt;
+  if(G.roomT>lim-8&&(G.tickT-=dt)<=0){G.tickT=1; sfx.tick(); toast("tk","A CLOCK IS TICKING. DON'T STAY IN ONE ROOM.");}
+  if(G.roomT>lim){const [x,y]=farSpot(G.room); G.foes.push(makeFoe("timekeeper",G.room,x,y)); sfx.chime(); G.shake=3; G.roomT=0;}
+}
+const FOE={
+  roughneck:{ // reacts to movement it can see; a catch starts the struggle
+    upd(f,dt){
+      const p=G.p, d=dist(f.x,f.y,p.x,p.y), sp=34+52*clamp(G.elapsed/600,0,1); // fast: full speed ten minutes in
+      if(f.state==="grab") return;
+      if(f.state==="stun"){ if((f.st-=dt)<=0){f.state="search"; f.tx=p.x; f.ty=p.y;} return; }
+      const sees=!G.hide&&p.moving&&d<170&&los(f.x,f.y-6,p.x,p.y-8);
+      if(sees){ if(f.state!=="chase"){f.state="chase"; sfx.growl(f.x); G.shake=Math.max(G.shake,2); toast("rn","IT SEES WHAT MOVES. FREEZE OR BREAK ITS SIGHT.");} f.tx=p.x; f.ty=p.y; f.lost=0; }
+      if(f.state==="chase"){ if(!sees&&(f.lost+=dt)>1.2) f.state="search"; moveFoe(f,f.tx,f.ty,sp,dt); if(d<11&&canCatch()) startStruggle(f); }
+      else if(f.state==="search"){ if(moveFoe(f,f.tx,f.ty,sp*0.5,dt)<4){f.state="idle"; f.wT=2;} }
+      else { if((f.wT-=dt)<=0){f.wT=2+Math.random()*3; const [x,y]=freeSpot(G.room,Math.random); f.tx=x*T+8; f.ty=y*T+10;} moveFoe(f,f.tx,f.ty,12,dt); }
+      if((f.scr=(f.scr||0)-dt)<=0){f.scr=f.state==="chase"?0.5:1.8; sfx.scrape(f.x);} // the wrench it drags
+    },
+    draw(f,t){
+      const x=Math.round(f.x), y=Math.round(f.y), fr=f.moving?Math.floor(t*(f.state==="chase"?10:5))%3:0;
+      if(f.state==="grab"){EA.roughneckLunge(ctx,x,y,f.v); return;}
+      if(f.state==="stun"&&Math.floor(t*10)%2) return;
+      if(f.face==="d") EA.roughneckDown(ctx,x,y,fr,f.v);
+      else if(f.dir<0) EA.mirrorX(ctx,x,()=>EA.roughneckRight(ctx,x,y,fr,f.v));
+      else EA.roughneckRight(ctx,x,y,fr,f.v);
+    }
+  },
+  tarling:{ // a puddle that follows the black on you; a catch is half a sludge bar
+    upd(f,dt){
+      const p=G.p, d=dist(f.x,f.y,p.x,p.y), smell=30+G.sludge*1.6, sp=12+G.sludge*0.22+night()*12; // slow
+      f.cool=Math.max(0,f.cool-dt);
+      if(f.state==="hide"){ if(f.cool<=0&&!G.hide&&G.graceIn<=0&&d<Math.max(16,smell)){f.state="ooze"; sfx.squelch(f.x); G.shake=Math.max(G.shake,1.5); toast("tl","A PUDDLE MOVED. IT FOLLOWS THE BLACK ON YOU.");} return; }
+      if(f.state==="ooze"){
+        if(G.hide||d>smell*1.7){f.state="hide"; return;}
+        const held=lightOn()&&G.level===3&&d<lightRadius()*0.8; // a full flame holds it off
+        if(held) moveFoe(f,f.x+(f.x-p.x)/(d||1)*24,f.y+(f.y-p.y)/(d||1)*24,sp*0.7,dt); else moveFoe(f,p.x,p.y,sp,dt);
+        if((f.sq=(f.sq||0)-dt)<=0){f.sq=1.4; sfx.squelch(f.x);}
+        if(d<9&&canCatch()){f.state="attack"; f.st=0;}
+        return;
+      }
+      f.st+=dt; if(f.st>0.3&&!f.hit){f.hit=true; hurt("tarling",50);} if(f.st>0.9){f.state="hide"; f.cool=6; f.hit=false;}
+    },
+    draw(f,t){
+      const x=Math.round(f.x), y=Math.round(f.y), d=dist(f.x,f.y,G.p.x,G.p.y);
+      if(f.state==="hide") EA.tarlingHide(ctx,x,y,d<50?(Math.sin(t*3)>0.6?0:1):2);
+      else if(f.state==="attack") EA.tarlingAttack(ctx,x,y,Math.min(2,Math.floor(f.st/0.3)));
+      else EA.tarlingOoze(ctx,x,y,Math.floor(t*6)%3);
+    }
+  },
+  knocker:{ // lives in a broken pipe; reaches for anyone close; sealed out by the valve wheels
+    upd(f,dt){
+      if(G.sealed[f.room.zone]){f.state="sealed"; return;}
+      const p=G.p, d=dist(f.x,f.y,p.x,p.y), reach=32+night()*12; // slow
+      f.side=p.x<f.x?1:-1;
+      if(f.state==="hidden"){
+        if(d<reach+46&&(f.knockT-=dt)<=0){f.knockT=1.1; sfx.knock(f.x); toast("kn","KNOCKING IN THE BROKEN PIPE. STAY BACK FROM IT.");}
+        if(d<reach&&!G.hide&&G.graceIn<=0&&!G.dying){f.state="burst"; f.st=0; sfx.knock(f.x); G.shake=3;}
+      } else if(f.state==="burst"){ if((f.st+=dt)>0.55){f.state="reach"; f.st=0; if(dist(f.x,f.y,p.x,p.y)<reach+4&&!G.hide&&!G.dying&&!G.struggle) die("knocker");} }
+      else if((f.st+=dt)>1.1){f.state="hidden"; f.knockT=0.6;}
+    },
+    draw(f,t){
+      if(f.state==="sealed") return;
+      const x=Math.round(f.x), y=Math.round(f.y), d=dist(f.x,f.y,G.p.x,G.p.y), v=f.v;
+      const fn=f.state==="burst"?()=>EA.knockerBurst(ctx,x,y,Math.min(2,Math.floor(f.st/0.2)),v):f.state==="reach"?()=>EA.knockerReach(ctx,x,y,Math.min(2,Math.floor(f.st/0.15)),v):()=>EA.knockerHidden(ctx,x,y,d<80?(Math.floor(t*3)%2?1:2):0,v);
+      if(f.side<0) EA.mirrorX(ctx,x,fn); else fn(); // its arms reach toward Ash
+    }
+  },
+  smother:{ // eats light: drains the lantern as it nears, and snuffs it on a catch
+    upd(f,dt){
+      const p=G.p, L=lanternPos(p.x,p.y,p.dir), on=lightOn()&&!G.hide, d=dist(f.x,f.y-22,L.x,L.y);
+      const sp=(on?16:10)+(G.elapsed>900?16:0)+(G.elapsed>1080?14:0); // fast in the last minutes
+      if((f.hum-=dt)<=0){f.hum=2.6; sfx.hum(f.x);}
+      if(f.state==="leave"){ if((f.fade-=dt*2)<=0) f.gone=true; return; }
+      f.fade=Math.min(1,f.fade+dt);
+      if(f.state==="fed"){ if((f.st+=dt)>3) f.state="leave"; return; }
+      toast("sm","IT EATS LIGHT. LANTERN OFF, AND STAND STILL.");
+      if(on){ f.lost=0; if(d<110) G.fuel=Math.max(0,G.fuel-(1-d/110)*7*dt); moveFoe(f,p.x,p.y+4,sp,dt,true); }
+      else if(p.moving&&!G.hide){ f.lost=0; moveFoe(f,p.x,p.y+4,sp*0.5,dt,true); }
+      else { if((f.lost+=dt)>7) f.state="leave"; if((f.wT-=dt)<=0){f.wT=2; f.tx=2*T+Math.random()*(W-4*T); f.ty=3*T+Math.random()*(H-5*T);} moveFoe(f,f.tx,f.ty,6,dt,true); }
+      if(on&&dist(f.x,f.y,p.x,p.y)<12&&canCatch()){ f.state="fed"; f.st=0; scare("smother"); G.level=0; G.fuel=Math.max(0,G.fuel-25); G.hitCool=3; sfx.out(); tell("IT ATE YOUR LIGHT. "+K("bright")+" LIGHTS IT AGAIN."); }
+    },
+    draw(f,t){
+      const x=Math.round(f.x), y=Math.round(f.y);
+      EA.smother(ctx,x,y,Math.floor(t*3),f.fade<0.4?4:f.fade<0.8?2:0);
+      if(f.state==="fed") EA.smotherGlow(ctx,x,y,f.st<1?2:f.st<2?1:0);
+    }
+  },
+  tenant:{ // waits in one locker; hiding in that one is the only cheap death, so it always shows its tells
+    upd(f,dt){
+      const d=dist(f.x,f.y,G.p.x,G.p.y);
+      f.shake=Math.max(0,f.shake-dt);
+      if(d<90&&(f.rat-=dt)<=0){f.rat=2.5+Math.random()*3; sfx.rattle(f.x); f.shake=0.35;}
+      if(d<70) toast("tn","A CRACKED LOCKER, EYES, FLIES. DON'T HIDE THERE.");
+    },
+    draw(f,t){
+      const x=f.lx*T, y=T-6, d=dist(f.x,f.y,G.p.x,G.p.y);
+      if(f.out){EA.tenantOpenLocker(ctx,x,y); EA.tenantFigure(ctx,x,y+2,true); return;}
+      EA.tenantLocker(ctx,x,y,f.shake>0?(Math.floor(t*30)%2?1:-1):0);
+      EA.tenantTells(ctx,x,y,d<50&&Math.sin(t*2)>-0.2?3:d<110&&Math.sin(t*1.3)>-0.6?2:1);
+      EA.tenantFlies(ctx,x,y,Math.floor(t*8));
+      for(let i=0;i<8;i++){const a=t*(2.2+i*0.5)+i*1.9, rr=5+(i*3)%7; px(ctx,(i+Math.floor(t*9))%4?"#4a463c":"#8f8778",Math.round(x+8+Math.cos(a)*rr),Math.round(y+6+Math.sin(a*1.4)*rr*0.6));} // flies, thick round it
+    }
+  },
+  firedamp:{ // gas that goes up near open flame; the lowest flame gets past it
+    upd(f,dt){
+      const p=G.p, cx=f.x, cy=f.y-8, d=dist(cx,cy,p.x,p.y-8), R=40+night()*16, flame=lightOn()&&G.level>=2&&!G.hide; // slow
+      if(f.state==="boom"){ if((f.st+=dt)>1.2) f.gone=true; return; }
+      if((f.wT-=dt)<=0){f.wT=3+Math.random()*3; const [x,y]=freeSpot(G.room,Math.random); f.tx=x*T+8; f.ty=y*T+10;}
+      moveFoe(f,f.tx,f.ty,5+night()*4,dt,true);
+      if(d<R+40&&(f.hs=(f.hs||0)-dt)<=0){f.hs=1.6; sfx.hiss(f.x);}
+      if(d<R+30) toast("fd","GAS. TURN THE LANTERN RIGHT DOWN TO PASS.");
+      const boom=()=>{f.state="boom"; f.st=0; sfx.boom(); G.shake=12; if(d<28&&!G.dying) die("firedamp");};
+      for(const m of mothsHere()) if(dist(m.x,m.y,cx,cy)<22){ m.gone=true; m.dead=true; m.inRoom=false; tell("THE MOTH FLEW INTO THE GAS. IT WENT UP."); boom(); return; }
+      if(G.flare&&G.flare.room===G.room&&dist(G.flare.x,G.flare.y,cx,cy)<R){ G.flare=null; boom(); return; }
+      if(flame&&d<R&&G.graceIn<=0&&!G.dying){ if((f.warn+=dt)>0.9){f.state="boom"; f.st=0; sfx.boom(); G.shake=12; die("firedamp");} }
+      else f.warn=Math.max(0,f.warn-dt*1.5);
+    },
+    draw(f,t){
+      const x=Math.round(f.x), y=Math.round(f.y), fr=Math.floor(t*4);
+      if(f.state==="boom"){ if(f.st<0.9) EA.firedampExplode(ctx,x,y,Math.min(2,Math.floor(f.st/0.3)),fr); else EA.firedampDissolve(ctx,x,y,2); return; }
+      if(f.warn>0) EA.firedampWarn(ctx,x,y,Math.min(2,Math.floor(f.warn/0.3)),fr); else EA.firedampDrift(ctx,x,y,fr);
+    }
+  },
+  timekeeper:{ // clocks in when you stay too long; a catch is half a sludge bar
+    upd(f,dt){
+      const p=G.p, d=dist(f.x,f.y,p.x,p.y);
+      if(f.state==="clockin"){ if((f.st+=dt)>1.3) f.state="walk"; return; }
+      if(f.state==="out"){ if((f.st+=dt)>0.8) f.gone=true; return; }
+      moveFoe(f,p.x,p.y,24+night()*34,dt);
+      if((f.tk=(f.tk||0)-dt)<=0){f.tk=0.5; sfx.tick();}
+      if(d<10&&canCatch()){ hurt("timekeeper",50); f.state="out"; f.st=0; G.roomT=0; }
+    },
+    draw(f,t){
+      const x=Math.round(f.x), y=Math.round(f.y), fr=f.moving?Math.floor(t*6)%3:0;
+      if(f.state==="clockin"){EA.timekeeperClockIn(ctx,x,y,Math.min(2,Math.floor(f.st/0.45))); return;}
+      if(f.state==="out"&&Math.floor(t*12)%2) return;
+      if(f.face==="d") EA.timekeeperDown(ctx,x,y,fr); else if(f.face==="u") EA.timekeeperUp(ctx,x,y,fr);
+      else if(f.dir<0) EA.mirrorX(ctx,x,()=>EA.timekeeperRight(ctx,x,y,fr)); else EA.timekeeperRight(ctx,x,y,fr);
+    }
+  }
+};
+
+// Lockers: hide from what hunts you. Only the Tenant's own locker is a trap.
+function startHide(lx){
+  const f=foesHere().find(f=>f.k==="tenant"&&f.lx===lx);
+  G.p.x=lx*T+8; G.p.y=2*T+6; G.p.dir="u"; G.cam=null; G.turn=null;
+  if(f){f.out=true; sfx.slam(); die("tenant"); return;}
+  G.hide={lx,breath:1}; sfx.rattle(G.p.x); noise(G.p.x,G.p.y,0.15);
+  toast("hide","HIDING. MOVE OR "+K("use")+" TO GET OUT.");
+}
+function endHide(gasp){
+  if(!G.hide) return; G.hide=null; sfx.rattle(G.p.x);
+  if(gasp){sfx.gasp(); noise(G.p.x,G.p.y,0.6); G.shake=3; tell("YOU HAD TO BREATHE.");}
+}
+function renderHide(){
+  const h=G.hide; if(!h) return;
+  const x0=W/2-72, w=144, sh=6, c="rgba(26,26,28,.95)"; let y=0;
+  for(const sy of [H/2-26,H/2-8,H/2+10]){ px(ctx,c,0,y,W,sy-y); px(ctx,c,0,sy,x0,sh); px(ctx,c,x0+w,sy,W-x0-w,sh); px(ctx,"#3a3a3c",x0,sy-1,w,1); px(ctx,"#0a0a0b",x0,sy+sh,w,1); y=sy+sh; }
+  px(ctx,c,0,y,W,H-y); px(ctx,"rgba(90,90,96,.08)",0,0,W,H);
+  if(h.breath<1){ text(ctx,"BREATH",W/2,H/2+34,1,INK3,"c"); px(ctx,"#1c1a17",W/2-40,H/2+44,80,3); px(ctx,h.breath<0.3?BLOOD:COLD,W/2-40,H/2+44,Math.round(80*h.breath),3); }
+}
+
+// The struggle: a run of keys (buttons on a touch screen), each in time. Missing half of them is the end.
+const SKEYS=["KeyQ","KeyE","KeyR","KeyF","KeyZ","KeyX","KeyC","KeyV","KeyT","KeyG"], SDIRS=["up","down","left","right"];
+function startStruggle(f){
+  const n=5+Math.min(2,Math.floor(G.elapsed/400)), pool=touchMode()?SDIRS:SKEYS, seq=[];
+  while(seq.length<n){const k=anyOf(pool); if(k!==seq[seq.length-1]) seq.push(k);}
+  G.struggle={f,seq,res:[],i:0,t:0,win:1.25-0.45*night(),flash:0,hits:[]};
+  f.state="grab"; G.cam=null; G.turn=null; G.toast=null; G.shake=6; sfx.growl(f.x);
+}
+function updStruggle(dt){ const s=G.struggle; s.t+=dt; s.flash=Math.max(0,s.flash-dt); if(s.t>=s.win) strugglePress(null); } // too slow is a miss
+function strugglePress(code){
+  const s=G.struggle; if(!s) return;
+  const ok=code===s.seq[s.i]; s.res.push(ok);
+  if(ok) sfx.click(); else {s.flash=0.25; G.sludge=clamp(G.sludge+8,0,100); G.shake=5; sfx.pain(G.sludge);}
+  s.i++; s.t=0;
+  const miss=s.res.filter(x=>!x).length;
+  if(miss*2>=s.seq.length||G.sludge>=100) endStruggle(false); else if(s.i>=s.seq.length) endStruggle(true);
+}
+function endStruggle(won){
+  const f=G.struggle.f; G.struggle=null;
+  if(!won){ die("roughneck"); return; }
+  const d=dist(f.x,f.y,G.p.x,G.p.y)||1; moveBox(G.room,f,(f.x-G.p.x)/d*16,(f.y-G.p.y)/d*16,4,2);
+  f.state="stun"; f.st=3; G.hitCool=4; sfx.thud(); tell("YOU KICKED IT OFF. NOW FREEZE, OR GET AWAY.");
+}
+function drawArrow(g,dir,cx,cy,n,col){
+  g.save(); g.translate(cx,cy); g.rotate({up:0,right:Math.PI/2,down:Math.PI,left:-Math.PI/2}[dir]);
+  for(let i=0;i<n;i++) px(g,col,-i,-n+i,2*i+1,1);
+  const w=Math.max(1,n>>2); px(g,col,-w,0,2*w+1,n);
+  g.restore();
+}
+function drawSKey(k,x,y,sz,col){
+  uiFrame(ctx,x,y,sz,sz,col,"rgba(5,5,5,.95)");
+  if(k.startsWith("Key")){const sc=sz>=24?3:1; text(ctx,k.slice(3),x+Math.round(sz/2),y+Math.round(sz/2)-Math.round(7*sc/2),sc,col,"c");}
+  else drawArrow(ctx,k,x+Math.round(sz/2),y+Math.round(sz/2),sz>=24?7:3,col);
+}
+function renderStruggle(){
+  const s=G.struggle; if(!s) return;
+  px(ctx,s.flash>0?"rgba(90,10,8,.45)":"rgba(0,0,0,.4)",0,0,W,H);
+  uiFrame(ctx,W/2-64,12,128,70,BLOOD,"rgba(5,5,5,.94)");
+  text(ctx,"BREAK FREE",W/2,17,1,BLOOD,"c");
+  const k=s.seq[s.i]; if(k) drawSKey(k,W/2-16,28,32,INK);
+  for(let j=1;j<=2;j++){const n=s.seq[s.i+j]; if(n) drawSKey(n,W/2+22+(j-1)*16,40,13,INK3);}
+  px(ctx,"#1c1a17",W/2-56,66,112,3); px(ctx,FLAME,W/2-56,66,Math.round(112*clamp(1-s.t/s.win,0,1)),3);
+  const pw=s.seq.length*6; s.seq.forEach((_,j)=>px(ctx,j<s.res.length?(s.res[j]?COLD:BLOOD):INK3,W/2-pw/2+j*6,73,4,3));
+  s.hits=[];
+  if(touchMode()) SDIRS.forEach((d,i)=>{const bw=40, x=Math.round(W/2-(4*bw+3*8)/2+i*(bw+8)), y=H-46;
+    uiFrame(ctx,x,y,bw,34,INK3,"rgba(5,5,5,.9)"); drawArrow(ctx,d,x+bw/2,y+17,6,INK); s.hits.push({id:d,x,y,w:bw,h:34});});
+}
+
 /* ================= scares, death, win ================= */
 const faces={moth:null,lis:null,other:null};
 function scare(kind){
   faces[kind]=faces[kind]||scareFace(kind);
-  G.scare={kind,t:0}; G.shake=6; sfx.scare();
+  G.scare={kind,t:0}; G.shake=SHAKE[kind]||6; sfx.scare();
 }
 function die(cause){
   if(G.dying) return;
   G.dying={cause,t:0};
-  if(cause==="moth") scare("moth"); else sfx.thud();
+  if(cause==="moth"||FOES.includes(cause)) scare(cause); else sfx.thud();
   stopLoops();
 }
 function finish(won,ending){
@@ -1165,7 +1538,14 @@ function finish(won,ending){
     won:won?[endingName(ending), "ENDING "+found+" OF "+ENDING_IDS.length+" FOUND."+(newBest?" NEW BEST TIME.":"")]:null,
     moth:["IT FOUND YOUR LIGHT","BRIGHT LIGHT CARRIES A LONG WAY DOWN HERE."],
     time:["THE LAST LIGHT WENT OUT","TWENTY MINUTES. THE DARK DOES NOT WAIT LONGER."],
-    dark:["THE DARK TOOK YOU","IT COVERED YOU A LITTLE AT A TIME."]
+    dark:["THE DARK TOOK YOU","IT COVERED YOU A LITTLE AT A TIME."],
+    roughneck:["IT DRAGGED YOU DOWN","IT SEES WHAT MOVES. FREEZE, OR BREAK ITS SIGHT."],
+    tarling:["THE PUDDLE GOT UP","IT FOLLOWS THE BLACK ON YOU. STAY IN THE LIGHT."],
+    knocker:["INTO THE PIPE","THE RED WHEELS SEAL THE BROKEN PIPES."],
+    tenant:["SOMEONE WAS ALREADY IN THERE","A CRACKED DOOR, EYES AND FLIES. PICK ANOTHER."],
+    firedamp:["THE GAS CAUGHT YOUR FLAME","TURN THE LANTERN RIGHT DOWN TO PASS IT."],
+    timekeeper:["CLOCKED IN","HE COMES FOR ANYONE WHO STAYS TOO LONG."],
+    smother:["THE DARK TOOK YOU","IT ATE YOUR LIGHT FIRST."]
   }[c];
   G.end={cause:c,title:copy[0],line:copy[1],stats:"TIME "+fmt(G.elapsed)+"   ROOMS "+rooms+"/"+ROOMS+(s.best?"   BEST "+fmt(s.best):""),unlock:fresh.length?"NEW LANTERN: "+fresh.map(l=>l.name).join(", "):""};
   titleT=0;
@@ -1330,6 +1710,7 @@ function talkSmudge(){
 }
 function talkOffice(){
   const m=G.moth, sv=G.save;
+  if(m.dead){dialog([["","THE FOREMAN'S LAMP IS COLD. NOTHING COMES TO IT NOW."]]);return;}
   if(G.helped==="lis"){dialog([["","THE FOREMAN'S LAMP IS COLD. HE KNOWS WHO YOU HELPED."]]);return;}
   if(G.helped==="moth"){dialog([["MOTH","IT'S STILL BURNING. GO ON. GO HOME."]]);return;}
   summon(m,OBJ.x+26,OBJ.y-10); met("moth");
@@ -1456,19 +1837,20 @@ function update(dt){
   G.shake=Math.max(0,G.shake-dt*14);
   if(G.dying){
     G.dying.t+=dt;
-    if(G.dying.cause!=="moth") G.sludge=Math.min(100,G.sludge+60*dt);
+    if(!INSTANT.includes(G.dying.cause)) G.sludge=Math.min(100,G.sludge+60*dt);
     if(G.dying.t>1.6) finish(false);
     return;
   }
   if(G.slide){G.slide.t+=dt/0.32; if(G.slide.t>=1) G.slide=null; return;}
   if(G.dlg){updDialog(dt); return;}            // talking stops the clock
   if(G.ui) return;                              // so do the bag and the journal
+  if(G.struggle){updStruggle(dt); return;}      // the struggle holds everything else still
 
   G.elapsed+=dt;
   if(G.flare){G.flare.t-=dt; if(G.flare.t<=0) G.flare=null;}
   if(G.cam) G.cam.flash=Math.max(0,G.cam.flash-dt);
   if(G.reloadT>0){G.reloadT-=dt; if(G.reloadT<=0){const n=Math.min(G.film,3-G.loaded); G.film-=n; G.loaded+=n; sfx.click();}}
-  if(G.moth.inRoom&&!G.moth.gone) journalSeen("moth");
+  if(mothsHere().length) journalSeen("moth");
   if(G.lis.inRoom&&!G.lis.gone) journalSeen("listener");
   G.hatchCool=Math.max(0,G.hatchCool-dt);
   if(G.sit){G.sit.t-=dt; if(G.sit.t<=0){endSit(); return;}}
@@ -1486,7 +1868,8 @@ function update(dt){
   if(keys.has("KeyS")||keys.has("ArrowDown")) my+=1;
   const run=keys.has("ShiftLeft")||keys.has("ShiftRight");
   if(G.turn&&(mx||my)){G.turn=null; tell("YOU LET GO OF THE WHEEL.");}
-  if(G.sit||G.exitSeq||G.cam){mx=0;my=0;} // a raised camera holds Ash still
+  if(G.hide&&(mx||my)) endHide(false);
+  if(G.sit||G.exitSeq||G.cam||G.hide){mx=0;my=0;} // a raised camera holds Ash still
   p.moving=!!(mx||my);
   if(p.moving){
     const l=Math.hypot(mx,my); mx/=l; my/=l;
@@ -1572,15 +1955,16 @@ function update(dt){
   if(G.smudge.follow){
     const sm=G.smudge, tx=p.x-(p.dir==="r"?12:p.dir==="l"?-12:0), ty=p.y-(p.dir==="d"?10:p.dir==="u"?-10:0)+2, dd=dist(sm.x,sm.y,tx,ty);
     if(dd>3&&!isSolid(tileAt(G.room,tx,ty))){const sp=Math.min(90,dd*3)*dt; sm.x+=(tx-sm.x)/dd*sp; sm.y+=(ty-sm.y)/dd*sp;}
-    if(G.moth.inRoom&&!G.moth.calm) toast("smudge","SMUDGE: IT'S HERE. MAKE THE LIGHT SMALL.");
+    if(mothsHere().some(m=>!m.calm)) toast("smudge","SMUDGE: IT'S HERE. MAKE THE LIGHT SMALL.");
   }
   if(G.lis.follow){const e=G.lis, tx=p.x+16, ty=p.y+4, dd=dist(e.x,e.y,tx,ty); e.room=G.room; e.inRoom=true; if(dd>3){const sp=Math.min(80,dd*3)*dt; e.x+=(tx-e.x)/dd*sp; e.y+=(ty-e.y)/dd*sp;}}
 
-  updateMoth(dt);
+  G.moths.forEach(m=>updateMoth(dt,m));
   updateListener(dt);
+  updFoes(dt);
 
   // warning sounds
-  const m=G.moth;
+  const m=mothsHere().sort((a,b)=>dist(a.x,a.y,p.x,p.y)-dist(b.x,b.y,p.x,p.y))[0]||G.moth;
   if(A.loops.flutter){
     let fv=0,pan=0;
     if(m.gone) fv=0;
@@ -1591,7 +1975,8 @@ function update(dt){
     A.loops.drone.gain.setTargetAtTime(G.blackShift?0:0.05+G.elapsed/TIME_LIMIT*0.07,A.ctx.currentTime,G.blackShift?0.05:1);
   }
   let near=Infinity;
-  if(m.inRoom&&!m.calm) near=Math.min(near,dist(m.x,m.y,p.x,p.y));
+  for(const mm of mothsHere()) if(!mm.calm) near=Math.min(near,dist(mm.x,mm.y,p.x,p.y));
+  for(const f of foesHere()) if(f.k!=="tenant"&&f.k!=="knocker") near=Math.min(near,dist(f.x,f.y,p.x,p.y));
   if(G.lis.inRoom&&!G.lis.calm) near=Math.min(near,dist(G.lis.x,G.lis.y,p.x,p.y));
   if(G.other&&G.other.state!=="copy") near=Math.min(near,dist(G.other.x,G.other.y,p.x,p.y));
   if(G.blackShift) near=Math.min(near,120);
@@ -1606,13 +1991,13 @@ function enterRoom(dir){
   const from=G.room, to=from.nb[dir], p=G.p;
   openShutDoor(); G.other=null; G.figure=null;
   G.enteredFrom={n:"s",s:"n",e:"w",w:"e"}[dir];
-  [G.moth,G.lis].forEach(e=>{if(e.inRoom&&e.room===from&&!e.gone&&!e.follow){e.calm=false;e.inRoom=false;e.exitDir=null;e.moveT=e.kind==="moth"?Math.max(3,9/agg()):5;}});
+  [...G.moths,G.lis].forEach(e=>{if(e.inRoom&&e.room===from&&!e.gone&&!e.follow){e.calm=false;e.inRoom=false;e.exitDir=null;e.moveT=e.kind==="moth"?Math.max(3,9/agg()):5;}});
   G.slide={from:roomCanvas(from),to:roomCanvas(to),dir,t:0};
   G.room=to;
   if(dir==="w") p.x=W-14; if(dir==="e") p.x=14; if(dir==="n") p.y=H-12; if(dir==="s") p.y=22;
   if(!to.visited){to.visited=true;}
   G.distCur=bfs(G.rooms,to);
-  [G.moth,G.lis].forEach(e=>{if(!e.gone&&!e.follow&&e.room===to&&!e.inRoom){placeInside(e); if(e.kind==="lis"){e.state="wander";}}});
+  [...G.moths,G.lis].forEach(e=>{if(!e.gone&&!e.follow&&e.room===to&&!e.inRoom){placeInside(e); if(e.kind==="lis"){e.state="wander";}}});
   if(G.smudge.follow){G.smudge.x=p.x+(dir==="e"?-14:dir==="w"?14:0); G.smudge.y=p.y+(dir==="s"?-12:dir==="n"?12:0);}
   if(G.lis.follow){G.lis.x=p.x+16; G.lis.y=p.y+4;}
   // the Other: late in a run, some rooms already have you in them
@@ -1621,10 +2006,10 @@ function enterRoom(dir){
     let ox=clamp(W-p.x,48,W-48), oy=p.y; if(boxHits(to,ox,oy,4,3)){ox=160;oy=104;}
     G.other={x:ox,y:oy,hist:[],state:"copy",lit:0,t:0,dark:0,dir:"d"}; G.echo=Math.max(G.echo,4);
   }
-  if(to.kind==="lockers") G.lockerT=2+Math.random()*6;
   G.critters=spawnCritters(to); G.turn=null; G.steam=[]; G.drops=[]; // steam and drips stay in the room they came from
   if(!G.toasts["z_"+to.zone]){G.toasts["z_"+to.zone]=1; tell(ZONE[to.zone].name);}
   else if(to.glitch&&G.blueprint) toast("glitch","THE MAP WON'T HOLD STILL IN HERE.");
+  foesOnEnter(to);
 }
 // Rats and baby tarlings: harmless, and they run from Ash. Rats squeal as they go, and that carries.
 function spawnCritters(r){
@@ -1710,7 +2095,7 @@ function updExitSeq(dt){
       toast("slip","THE LANTERN DIED. YOU SLIPPED BACK DOWN."); return true;
     }
     if(q.t>=q.mothAt&&!q.came){ q.came=true; const m=G.moth; m.room=G.room; m.inRoom=true; m.calm=false; m.exitDir=null; m.x=DOOR.s.x; m.y=DOOR.s.y; m.safeT=0; m.interest=100; sfx.sting(); }
-    updateMoth(dt); if(G.dying) return true;
+    G.moths.forEach(m=>updateMoth(dt,m)); if(G.dying) return true;
   }
   if(q.type==="drain"){
     p.moving=false;
@@ -1743,7 +2128,6 @@ function updWorld(dt){
   }
   if(r.hole&&Math.random()<dt*2.5) G.drops.push({x:r.hole.x+(Math.random()-0.5)*36,y:r.hole.y+(Math.random()-0.5)*32,v:-5,life:0.5,bubble:true});
   updCritters(dt);
-  if(r.kind==="lockers"&&G.lockerT>0){G.lockerT-=dt; if(G.lockerT<=0){sfx.rattle(40+Math.random()*240); G.shake=1.5;}}
   // a shut door opens again
   if(G.doorShut){G.doorShut.t-=dt; if(G.doorShut.t<=0){openShutDoor(); sfx.clank();}}
   G.echo=Math.max(0,G.echo-dt); G.wrongFace=Math.max(0,G.wrongFace-dt);
@@ -1766,7 +2150,7 @@ function hallucinate(){
   if(k==="face") G.wrongFace=0.7;
   if(k==="whisper") sfx.whisper(Math.random()*2-1);
   if(k==="door"){ const d=G.enteredFrom; if(d&&G.room.nb[d]&&!G.doorShut&&dist(DOOR[d].x,DOOR[d].y,p.x,p.y)>50) shutDoor(d); else sfx.whisper(0); }
-  if(k==="fake"){ const kinds=["moth","lis","other"], f=kinds[Math.floor(Math.random()*3)]; faces[f]=faces[f]||scareFace(f); G.scare={kind:f,t:0.32}; G.shake=5; sfx.scare(); }
+  if(k==="fake"){ const f=anyOf(["moth","lis","other",...G.roster]); faces[f]=faces[f]||scareFace(f); G.scare={kind:f,t:0.32}; G.shake=5; sfx.scare(); }
 }
 function updOther(dt){
   const o=G.other; if(!o) return;
@@ -1831,6 +2215,7 @@ function interactables(){
   if(r.valves&&!G.turn) for(const v of r.valves) if(!v.shut) out.push({x:v.x,y:T+10,fn:()=>startTurn(r,v)});
   if(r.term) out.push({x:r.term.x,y:3*T+6,fn:useTerminal});
   if(r.hole) out.push({x:r.hole.x,y:7*T-4,fn:lookHole});
+  if(r.kind==="lockers"&&!G.hide) for(const x of [2,3,4,5,6,7,12,13,14,15,16,17]) if(!isSolid(r.tiles[2*RW+x])) out.push({x:x*T+8,y:2*T+4,fn:()=>startHide(x)});
   return out;
 }
 function nearestThing(){
@@ -1984,8 +2369,8 @@ function renderGame(){
 
   ctx.drawImage(roomCanvas(G.room),0,0);
   const on=lightOn(), R=lightRadius();
-  const flick=(G.fuel<20?0.12:0.04)+(G.moth.inRoom?0.08:0);
-  const rr=R*(1+Math.sin(t*13)*flick*0.5+(fxRnd()-0.5)*flick);
+  const flick=(G.fuel<20?0.12:0.04)+(mothsHere().length?0.08:0);
+  const rr=R*(1+Math.sin(t*13)*flick*0.5+(fxRnd()-0.5)*flick)*lightEaten(); // the Smother eats the light around it
   const L=lanternPos(p.x,p.y,p.dir);
 
   // the room's own things
@@ -2017,13 +2402,15 @@ function renderGame(){
 
   // actors, back to front
   const sinking=G.exitSeq&&G.exitSeq.type==="drain";
-  const actors=sinking?[]:[{y:p.y,d:()=>drawPlayer(ctx,p.x,p.y,p.dir,p.moving?(p.step?1:2):0,on,G.sludge,t)}];
+  for(const f of foesHere()) if(f.k==="tenant") FOE.tenant.draw(f,t);
+  const actors=sinking||G.hide?[]:[{y:p.y,d:()=>drawPlayer(ctx,p.x,p.y,p.dir,p.moving?(p.step?1:2):0,on,G.sludge,t)}];
+  for(const f of foesHere()) if(!["tenant","smother","firedamp"].includes(f.k)) actors.push({y:f.k==="knocker"?0:f.y,d:()=>FOE[f.k].draw(f,t)});
   if(G.lis.inRoom&&!G.lis.gone) actors.push({y:G.lis.y,d:()=>drawListener(ctx,G.lis.x,G.lis.y,t,G.lis.state==="hunt"&&!G.lis.calm)});
   if(G.smudge.follow) actors.push({y:G.smudge.y,d:()=>drawSmudge(ctx,G.smudge.x,G.smudge.y,t)});
   if(G.other) actors.push({y:G.other.y,d:()=>drawOther(ctx,G.other,t)});
   for(const c of G.critters) actors.push({y:c.y,d:()=>drawCritter(c,t)});
   actors.sort((a,b)=>a.y-b.y).forEach(a=>a.d());
-  if(G.moth.inRoom&&!G.moth.gone) drawMoth(ctx,G.moth.x,G.moth.y,G.moth.calm?t*0.25:t);
+  for(const m of mothsHere()) drawMoth(ctx,m.x,m.y,m.calm?t*0.25:t,m.v);
 
   // warm light
   if(on&&rr>0){
@@ -2072,10 +2459,12 @@ function renderGame(){
   }
   // the moth's eyes show even in the dark
   if(G.smudge.follow&&!on){px(ctx,"#e8e4dc",Math.round(G.smudge.x)-2,Math.round(G.smudge.y)-9,1,2);px(ctx,"#e8e4dc",Math.round(G.smudge.x)+1,Math.round(G.smudge.y)-9,1,2);}
-  if(G.moth.inRoom&&!G.moth.gone&&dist(G.moth.x,G.moth.y,L.x,L.y)>rr*0.7){
+  for(const m of mothsHere()) if(dist(m.x,m.y,L.x,L.y)>rr*0.7){
     const a=0.35+Math.sin(t*2)*0.15;
-    ctx.fillStyle="rgba(246,231,166,"+a+")"; ctx.fillRect(Math.round(G.moth.x)-1,Math.round(G.moth.y)-6,1,1); ctx.fillRect(Math.round(G.moth.x)+1,Math.round(G.moth.y)-6,1,1);
+    ctx.fillStyle="rgba(246,231,166,"+a+")"; ctx.fillRect(Math.round(m.x)-1,Math.round(m.y)-6,1,1); ctx.fillRect(Math.round(m.x)+1,Math.round(m.y)-6,1,1);
   }
+  // the Smother is darker than the dark, with a faint edge; the gas glows
+  for(const f of foesHere()) if(f.k==="smother"||f.k==="firedamp"){ ctx.globalAlpha=f.k==="firedamp"&&!on?0.6:1; FOE[f.k].draw(f,t); ctx.globalAlpha=1; }
   // a terminal screen glows through the dark
   if(rm.term){const s=rm.term; px(ctx,"#0e2a16",s.x-8,s.y-12,16,10); for(let i=0;i<10;i++) px(ctx,fxRnd()<0.5?"#2e6a3a":"#4a9a5a",s.x-8+Math.floor(fxRnd()*15),s.y-12+Math.floor(fxRnd()*10)); if(Math.sin(t*5)>0) px(ctx,"#8fd09a",s.x-6,s.y-5,3,1);}
   // the Black Shift: tar comes in from every wall
@@ -2090,18 +2479,20 @@ function renderGame(){
   if(G.figure&&on){const a=G.figure.a, fx=Math.round(L.x+Math.cos(a)*rr*0.92), fy=Math.round(L.y+Math.sin(a)*rr*0.92); px(ctx,"#050505",fx-3,fy-22,6,22); px(ctx,"#050505",fx-2,fy-26,4,4); px(ctx,"#e8e4dc",fx-1,fy-24); px(ctx,"#e8e4dc",fx+1,fy-24);}
   if(G.other&&!(on&&dist(G.other.x,G.other.y-12,L.x,L.y)<rr)){const o=G.other; px(ctx,"rgba(232,228,220,.55)",Math.round(o.x)-2,Math.round(o.y)-18); px(ctx,"rgba(232,228,220,.55)",Math.round(o.x)+1,Math.round(o.y)-18);}
   // in the dark you can only just make yourself out
-  if(!on){ctx.globalAlpha=0.3; drawPlayer(ctx,p.x,p.y,p.dir,p.moving?(p.step?1:2):0,false,G.sludge,t); ctx.globalAlpha=1;}
+  if(!on&&!G.hide){ctx.globalAlpha=0.3; drawPlayer(ctx,p.x,p.y,p.dir,p.moving?(p.step?1:2):0,false,G.sludge,t); ctx.globalAlpha=1;}
   for(const d of G.drips) px(ctx,"#060508",Math.round(d.x),Math.round(d.y),1,2);
   for(const d of G.drops) px(ctx,d.bubble?"#22383c":"#3a4a4c",Math.round(d.x),Math.round(d.y),1,d.bubble?1:2);
 
   ctx.setTransform(1,0,0,1,0,0);
+  renderHide(); // the inside of the locker, under the messages
   drawHud();
   if(G.turn){const k=G.turn.t/G.turn.dur; px(ctx,"#1c1a17",Math.round(p.x)-10,Math.round(p.y)-36,20,3); px(ctx,BLOOD,Math.round(p.x)-10,Math.round(p.y)-36,Math.round(20*k),3);}
-  if(!G.dlg&&!G.dying&&!G.sit&&!G.turn&&hintsOn()){const it=nearestThing(); if(it&&!it.low) text(ctx,K("use"),Math.round(p.x),Math.round(p.y)-36,1,INK,"c","#000");}
+  if(!G.dlg&&!G.dying&&!G.sit&&!G.turn&&!G.hide&&!G.struggle&&hintsOn()){const it=nearestThing(); if(it&&!it.low) text(ctx,K("use"),Math.round(p.x),Math.round(p.y)-36,1,INK,"c","#000");}
   if(G.sit) text(ctx,"SIT STILL  "+Math.ceil(G.sit.t),W/2,24,1,INK,"c","#000");
   if(G.exitSeq) text(ctx,(G.exitSeq.type==="chimney"?"CLIMB  ":"HOLD YOUR BREATH  ")+Math.ceil(G.exitSeq.dur-G.exitSeq.t),W/2,24,1,INK,"c","#000");
   if(G.liftT>0) text(ctx,"THE CAGE  "+Math.ceil(G.liftT),W/2,24,1,FLAME,"c","#000");
   if(G.dlg) renderDialog();
+  renderStruggle();
 
   // scare
   if(G.scare){
@@ -2112,7 +2503,8 @@ function renderGame(){
     ctx.drawImage(f,Math.round(W/2-24*s+j),Math.round(H/2-24*s+j*0.6),48*s,48*s);
   }
   // being consumed
-  if(G.dying&&G.dying.cause!=="moth"){
+  if(G.dying&&G.dying.cause==="firedamp"&&G.dying.t<0.4){ctx.fillStyle="rgba(255,190,90,"+(0.8-G.dying.t*2)+")"; ctx.fillRect(0,0,W,H);}
+  if(G.dying&&!INSTANT.includes(G.dying.cause)){
     const k=clamp(G.dying.t/1.4,0,1);
     ctx.fillStyle="#060508";
     for(let i=0;i<W;i+=4){const h=k*H*(0.55+0.45*Math.sin(i*0.31))+k*k*H; ctx.fillRect(i,0,4,h/2); ctx.fillRect(i,H-h/2,4,h/2);}
@@ -2348,7 +2740,7 @@ function renderEnd(){
   const k=clamp(titleT/0.6,0,1);
   ctx.globalAlpha=k;
   uiFrame(ctx,W/2-51,11,102,102,e.cause==="won"?COLD:"#3a1414","#000");
-  if(e.cause==="moth"){ faces.moth=faces.moth||scareFace("moth"); ctx.drawImage(faces.moth,W/2-48,14,96,96); }
+  if(e.cause==="moth"||FOES.includes(e.cause)){ faces[e.cause]=faces[e.cause]||scareFace(e.cause); ctx.drawImage(faces[e.cause],W/2-48,14,96,96); }
   else {
     epg.clearRect(0,0,PN,PN);
     drawPortrait(epg,0,0,e.cause==="won"?0:93,titleT,false,fxRnd);
@@ -2428,7 +2820,7 @@ function throwFlare(){
   G.flares--; G.flare={x:clamp(G.p.x+d[0]*44,24,W-24),y:clamp(G.p.y+d[1]*36,30,H-14),t:8,room:G.room};
   nz({dur:0.7,freq:5200,q:0.6,gain:0.07}); noise(G.flare.x,G.flare.y,0.35); tell("THE FLARE CATCHES. LET IT HAVE THE ATTENTION.");
 }
-function toggleCamera(){ if(!G.camera) return "NO CAMERA."; G.cam=G.cam?null:{filter:0,flash:0}; sfx.click(); }
+function toggleCamera(){ if(!G.camera) return "NO CAMERA."; if(G.hide) return "NO ROOM IN A LOCKER."; G.cam=G.cam?null:{filter:0,flash:0}; sfx.click(); }
 function reloadFilm(){
   if(!G.camera||G.reloadT>0) return;
   if(G.loaded>=3){ tell("THE CAMERA IS ALREADY FULL."); return; }
@@ -2436,7 +2828,7 @@ function reloadFilm(){
   G.reloadT=1.2; sfx.click(); noise(G.p.x,G.p.y,0.15);
 }
 // Who is in the picture. Later creatures add themselves here.
-function photoTargets(){ const out=[]; if(G.moth.inRoom&&!G.moth.gone) out.push("moth"); if(G.lis.inRoom&&!G.lis.gone) out.push("listener"); return out; }
+function photoTargets(){ const out=[]; if(mothsHere().length) out.push("moth"); if(G.lis.inRoom&&!G.lis.gone) out.push("listener"); for(const f of foesHere()) if(foeSeen(f)&&!out.includes(f.k)) out.push(f.k); return out; }
 function takePhoto(){
   if(G.reloadT>0) return;
   if(G.loaded<1){ sfx.click(); tell(G.film?"NO FILM LOADED. "+K("reload")+" LOADS IT.":"OUT OF FILM."); return; }
@@ -2444,7 +2836,8 @@ function takePhoto(){
   nz({dur:0.05,freq:3200,q:2,gain:0.14}); setTimeout(()=>nz({dur:0.04,freq:1700,q:3,gain:0.09}),70);
   if(G.cam.filter===0){ // the flash: seen by everything, wanted by the Moth
     G.cam.flash=0.3; noise(G.p.x,G.p.y,0.5);
-    const m=G.moth; if(!m.gone&&!m.calm){ m.interest=100; m.moveT=Math.min(m.moveT,0.5); m.flashT=5; }
+    for(const m of G.moths) if(!m.gone&&!m.calm){ m.interest=100; m.moveT=Math.min(m.moveT,0.5); m.flashT=5; }
+    for(const f of foesHere()) if(f.k==="roughneck"&&f.state!=="stun"&&dist(f.x,f.y,G.p.x,G.p.y)<170){f.state="stun"; f.st=3; sfx.growl(f.x);} // the flash blinds it
   }
   const got=photoTargets(); got.forEach(journalPhoto);
   if(!got.length) tell("JUST DARK AND PIPES IN THAT ONE.");
@@ -2642,6 +3035,7 @@ function renderKeys(){
 // Real keys are turned into the game's own action codes here, so the rest of the game never sees a rebinding.
 function onRawKey(e){
   if(capture){ e.preventDefault(); if(!e.repeat) bindKey(e.code); return; }
+  if(mode==="play"&&G&&G.struggle&&!touchMode()&&e.code!=="Escape"){ e.preventDefault(); if(!e.repeat) strugglePress(e.code); return; } // any key, as printed
   const c=canon(e.code), menu=mode!=="play"||!!subMenu||!!(G&&(G.dlg||G.ui));
   const code=menu&&MENU_KEYS.has(e.code)?e.code:c;
   if(!code) return;
@@ -2676,6 +3070,7 @@ function onKeyDown(e){
   if(mode==="play"&&G.dlg&&G.introPanel!=null&&e.code==="Escape"){G.dlg=null;introDone();return;}
   if(mode==="play"&&G.ui){uiKey(e.code);return;}
   if(e.code==="Escape"||e.code==="KeyP"){togglePause();return;}
+  if(G.struggle){ const d={KeyW:"up",KeyS:"down",KeyA:"left",KeyD:"right",ArrowUp:"up",ArrowDown:"down",ArrowLeft:"left",ArrowRight:"right"}[e.code]; if(d&&!e.repeat&&touchMode()) strugglePress(d); return; }
   if(mode!=="play"||G.dying||G.slide) return;
   if(G.dlg){dialogKey(e.code);return;}
   if(G.sit||G.exitSeq) return;
@@ -2683,7 +3078,7 @@ function onKeyDown(e){
   if(e.code==="KeyB"){G.ui="journal"; sfx.click(); return;}
   if(e.code==="KeyR"){reloadFilm(); return;}
   if(G.cam&&camKey(e.code)) return;
-  if(e.code==="Space"||e.code==="Enter"){const it=nearestThing(); if(it) it.fn(); return;}
+  if(e.code==="Space"||e.code==="Enter"){ if(G.hide){endHide(false); return;} const it=nearestThing(); if(it) it.fn(); return;}
   if(e.code==="KeyQ"||e.code==="KeyE"){
     const nl=clamp(G.level+(e.code==="KeyE"?1:-1),0,3);
     if(nl!==G.level){G.level=nl;sfx.click();noise(G.p.x,G.p.y,0.1);}
@@ -2696,6 +3091,7 @@ window.addEventListener("blur",()=>{keys.clear(); if(mode==="play") togglePause(
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&mode==="play") togglePause();});
 // a tap or click on the picture: menu rows, dialogue choices, or "next"
 function tapAt(x,y){
+  if(mode==="play"&&G&&G.struggle){const h=G.struggle.hits.find(h=>x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h); if(h) strugglePress(h.id); return;}
   if(mode==="play"&&G&&G.ui&&!subMenu){uiTap(x,y);return;}
   if(mode==="end"&&!subMenu){ if(titleT>0.8) begin(); return; }
   if(capture) return;
@@ -2805,6 +3201,7 @@ requestAnimationFrame(loop);
 /* ================= self-check (run LastLight.selfTest() in the console) ================= */
 if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
   get state(){return G;}, get mode(){return mode;}, key:k=>dialogKey(k), talk:k=>({wick:talkWick,gauge:talkGauge,smudge:talkSmudge,office:talkOffice,whistle:talkWhistle,hatch:atHatch})[k](), exit:t=>atExit(t), payload:()=>savePayload(), apply:o=>applyPayload(o), code:()=>saveCode(), hall:()=>hallucinate(), map:seed=>genMap(seed),
+  spawn:(k,x,y)=>{const f=makeFoe(k,G.room,x,y); G.foes.push(f); return f;}, press:c=>strugglePress(c), face:k=>scareFace(k),
   selfTest(n){
     n=n||40;
     for(let i=0;i<n;i++){
@@ -2860,6 +3257,7 @@ if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.LastLight={
     const cj=cleanSave({journal:{seen:["moth","dragon","moth"],photos:["listener","moth",7]}}).journal;
     console.assert(cj.seen.join()==="moth"&&cj.photos.join()==="moth","journal cleaned: known creatures, photos only of met ones");
     console.assert(JIDS.length===BESTIARY.length&&BESTIARY.every(b=>JIDS.includes(b.id)),"every journal page has art");
+    console.assert(FOES.every(k=>FOE[k].upd&&FOE[k].draw&&JIDS.includes(k)&&SHAKE[k]&&scareFace(k).width===48),"every new enemy has behaviour, art, a page, a shake and a scare face");
     console.assert(cleanBinds({use:["KeyW"]})===null&&cleanBinds({pause:[]})===null&&cleanBinds({run:["<script>"]})===null,"bad key bindings refused");
     console.assert(cleanBinds(null).use[0]==="Space"&&canon("ArrowUp")!==undefined,"default key bindings");
     return "ok";
