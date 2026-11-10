@@ -243,6 +243,7 @@ function buildRoom(r,isStart,isExit){
   }
   if(!isStart&&rnd()<0.18) for(let k=0,n=2+Math.floor(rnd()*4);k<n;k++){const [x,y]=freeTile(); r.decor.push({k:"moth",x:x*T+3+Math.floor(rnd()*10),y:y*T+4+Math.floor(rnd()*9)});}
   r.hatch=isExit?{x:160,y:84}:null;   // every way out sits in the middle of its room
+  r.start=!!isStart;
 }
 
 // Which tiles Ash can walk to from the centre of the room (the cross between the doors is always open).
@@ -356,6 +357,7 @@ function paintRoom(r){
   }
   paintKind(g,r,rnd);
   paintCrates(g,r); paintDecor(g,r,rnd);
+  if(r.start) paintWreck(g);
   if(r.blood) for(let k=0;k<3;k++){const x=T+Math.floor(rnd()*(W-3*T)); px(g,"#3e1410",x,3+Math.floor(rnd()*6),2+Math.floor(rnd()*4),2); px(g,"#3e1410",x+1,6,1,4+Math.floor(rnd()*8));}
   if(r.blood&&rnd()<0.6){const x=T*3+Math.floor(rnd()*(W-T*6)), y=T*3+Math.floor(rnd()*(H-T*6)); if(!isSolid(tileAt(r,x,y))){for(let k=0;k<9;k++) px(g,"#3e1410",x+k*3+Math.floor(rnd()*2),y+Math.floor(rnd()*3)-k,2,2);}}
   if(r.scrawl){const w=textW(r.scrawl,1), x=Math.max(T+2,Math.min(W-T-2-w,T*2+Math.floor(rnd()*(W-T*4-w)))), y=r.kind==="lockers"?T*2+6:T+4+Math.floor(rnd()*4); text(g,r.scrawl,x,y,1,"#5a1a14");}
@@ -528,6 +530,19 @@ function paintDecor(g,r,rnd){
     }
     if(d.k==="moth"){px(g,"#5c564c",x-3,y,3,2); px(g,"#5c564c",x+1,y,3,2); px(g,"#3b352c",x,y-1,1,3);} // wings flat, dead
   }
+}
+function paintWreck(g){ // the lift cage Ash slept in, smashed at the bottom, and the blanket and rags he woke on
+  px(g,"#2a2622",159,0,2,34); px(g,"#4a4540",157,34,1,3); px(g,"#4a4540",161,33,1,4); px(g,"#4a4540",159,35,2,2);
+  g.fillStyle="#2a2622"; g.beginPath(); g.moveTo(126,100); g.lineTo(196,96); g.lineTo(198,112); g.lineTo(124,116); g.fill();
+  for(const [x,y] of [[128,101],[192,97],[194,110],[127,114]]) px(g,"#4a4540",x,y);
+  for(let i=0;i<9;i++){const bx=130+i*8, bend=i>3&&i<7?(i-3)*3:0; px(g,"#3a3530",bx,60+bend,2,38-bend); px(g,"#3a3530",bx+(bend?2:0),56,2,5);}
+  px(g,"#4a4540",128,56,70,3); g.fillStyle="#1c1a17"; g.beginPath(); g.moveTo(128,56); g.lineTo(150,50); g.lineTo(170,62); g.lineTo(198,52); g.lineTo(198,58); g.lineTo(128,60); g.fill();
+  for(let i=0;i<6;i++) px(g,"#3a3530",96,112+i*3,26,1); px(g,"#4a4540",94,111,30,2); // a side panel, torn off
+  for(let i=0;i<4;i++) px(g,"#3a3530",200+i*5,70+i*4,2,30); px(g,"#4a4540",198,68,24,2); // the gate, on one hinge
+  for(let i=0;i<8;i++) px(g,i%2?"#9fb7bd":"#4a4540",140+((i*37)%60),118+((i*13)%10)); // bulb glass and bolts
+  g.fillStyle="#3a3026"; g.beginPath(); g.ellipse(178,106,16,5,0,0,7); g.fill();
+  g.fillStyle="#4a5a7a"; g.beginPath(); g.ellipse(150,106,16,6,-0.1,0,7); g.fill(); for(let i=0;i<4;i++) px(g,"#6a7a9a",140+i*6,102+(i%2),3,7);
+  px(g,"#6a5a2a",202,124,74,9); text(g,"OUT OF ORDER",239,125,1,"#2a1d14","c");
 }
 function roomCanvas(r){return r.canvas||(r.canvas=paintRoom(r));}
 
@@ -847,12 +862,12 @@ const LOGS=[
 const GEAR={head:"hardhat",body:"vest",feet:"boots"};
 const STASHABLE=["flask","tea","flare","film","hardhat","vest"];
 const CRATE_ITEMS=["blueprint","camera","film","flare","oil","scrip","hardhat","vest"];
-const EXIT_NAME={hatch:"THE HATCH",lift:"GOING UP",chimney:"BACK THE WAY YOU CAME",drain:"WASHED OUT"};
+const EXIT_NAME={hatch:"THE HATCH",lift:"GOING UP",chimney:"UP THE CHIMNEY",drain:"WASHED OUT"};
 const VAR_NAME={alone:"ALONE",lamp:"THE FOREMAN'S LAMP",quiet:"QUIET SHIFT",sun:"TWO FOR THE SUNRISE"};
 const EXIT_TEXT={
   hatch:"ASH CRANKS THE HATCH OPEN AND CLIMBS OUT INTO A GREY DAWN.",
   lift:"THE CAGE SHUDDERS UP THROUGH 900 FEET OF DARK. THE DOORS OPEN ON MORNING.",
-  chimney:"ASH CLIMBS OUT OF THE SAME CHIMNEY HE FELL INTO. THE TOWN IS STILL ASLEEP.",
+  chimney:"ASH CLIMBS OUT OF THE CHIMNEY THAT KEPT HIM WARM ALL THOSE NIGHTS. THE TOWN IS STILL ASLEEP.",
   drain:"HOLLOW CREEK SPITS ASH OUT ONTO THE MUD. SOAKED. BLACK TO THE ELBOWS. ALIVE."
 };
 const VAR_TEXT={
@@ -1359,7 +1374,7 @@ function continueNight(){
   const o=readNight(); if(!o) return;
   audioStart(); stopLoops();
   try{ newGame(o); }catch(e){ clearNight(); newGame(); } // a night that will not load is not worth a crash
-  startLoops(); mode="play"; pauseMenu.sel=0; pauseMenu.confirm=null; G.introPanel=null; tell("YOU PICK THE NIGHT BACK UP.");
+  startLoops(); mode="play"; pauseMenu.sel=0; pauseMenu.confirm=null; G.cut=null; tell("YOU PICK THE NIGHT BACK UP.");
 }
 function saveNight(){
   try{ localStorage.setItem(NIGHT_KEY,JSON.stringify(nightSnapshot())); readNight(); spMsg="SAVED. QUIT ANY TIME, CONTINUE HERE."; sfx.chime(); }
@@ -1812,7 +1827,6 @@ function dialog(steps,onDone){
 }
 function stepPanel(){
   const st=G.dlg.steps[G.dlg.i];
-  if(st[4]!==undefined&&st[4]!==G.introPanel){G.introPanel=st[4]; G.panelAt=titleT; const f={3:"sting",4:"rumble",5:"whoosh",6:"thud",8:"whisper"}[st[4]]; if(f) sfx[f](0);}
   say((st[0]?st[0]+": ":"")+st[1]);
 }
 function wrapText(str,n){
@@ -2060,24 +2074,14 @@ function endingSeq(kind){
   dialog(steps,()=>{sfx.win();stopLoops();finish(true,id);});
 }
 function intro(){
-  const sv=G.save, runs=sv.runs||0;
-  if(!runs){
-    dialog([["","MOUNT HOLLOW. EVERYONE IN TOWN KNOWS THE RULE.",null,null,0],["","NOBODY GOES NEAR THE OLD OIL WORKS CHIMNEY."],
-      ["","ASH WENT ANYWAY.",null,null,1],["ASH","A WHOLE TOWN SCARED OF A CHIMNEY. COME ON."],
-      ["ASH","IT'S A HOLE. WHAT'S IT GONNA DO, BITE ME?",null,null,2],
-      ["","AT THE BOTTOM, SOMETHING OPENED ITS EYES.",null,null,3],
-      ["","IT DID NOT BITE.",null,null,4],["","IT WAS JUST VERY, VERY DEEP.",null,null,5],
-      ["","...",null,null,6],
-      ["","ASH WAKES UP ON A PILE OF OILY RAGS. A LANTERN IS BURNING BESIDE HIM.",null,null,7],["ASH","...I DEFINITELY DIDN'T BRING A LANTERN."],
-      ["","SOMEWHERE IN THE DARK, SOMETHING NOTICED THE LIGHT.",null,null,8]],introDone);
-    return;
-  }
+  const sv=G.save;
+  if(!sv.runs){ startCut(OPENING); return; }
   const line={moth:["","YOU WAKE ON THE RAGS AGAIN. SOMEWHERE FAR OFF, SOMETHING FLUTTERS."],dark:["","YOU WAKE ON THE RAGS AGAIN. YOUR HANDS ARE STILL A LITTLE BLACK."],time:["","YOU WAKE ON THE RAGS AGAIN. THE LANTERN IS FULL. IT WASN'T, LAST TIME."]}[sv.lastDeath]
-    ||["","YOU CLIMBED OUT. AND NOW YOU'RE BACK ON THE RAGS. WHY ARE YOU BACK ON THE RAGS?"];
+    ||["","YOU GOT OUT. AND NOW YOU'RE BACK ON THE RAGS. AT LEAST IT'S WARM DOWN HERE."];
   const ash={moth:"COOL. COOL COOL COOL.",dark:"GREAT. LOVE THAT FOR ME.",time:"...I'M NOT GONNA THINK ABOUT THAT."}[sv.lastDeath]||"FORGOT MY DIGNITY DOWN HERE.";
-  dialog([[line[0],line[1],null,null,7],["ASH",ash]],introDone);
+  startCut([{draw:cutWake,pan:[40,30,40,10],tune:"A3 - C4 E4",beat:0.7,lines:[[line[0],line[1]],["ASH",ash]]}]);
 }
-function introDone(){G.introPanel=null; if(EVENTS[G.ev]) toast("ev",EVENTS[G.ev]); else toast("talk",K("use")+" TO TALK, READ AND USE THINGS.");}
+function introDone(){ if(EVENTS[G.ev]) toast("ev",EVENTS[G.ev]); else toast("talk",K("use")+" TO TALK, READ AND USE THINGS.");}
 
 /* ================= main update ================= */
 function update(dt){
@@ -2093,6 +2097,7 @@ function update(dt){
     if(G.dying.t>1.6) finish(false);
     return;
   }
+  if(G.cut){updCut(dt); return;}                // the opening holds the night still
   if(G.slide){G.slide.t+=dt/0.32; if(G.slide.t>=1) G.slide=null; return;}
   if(G.dlg){updDialog(dt); return;}            // talking stops the clock
   if(G.video){updVideo(dt); return;}            // so does watching a tape
@@ -2469,6 +2474,7 @@ function interactables(){
   if(r.valves&&!G.turn) for(const v of r.valves) if(!v.shut) out.push({x:v.x,y:T+10,fn:()=>startTurn(r,v)});
   if(r.term) out.push({x:r.term.x,y:3*T+6,fn:useTerminal});
   if(r.savept) out.push({x:15*T,y:T+12,fn:openSavePoint});
+  if(r===G.map.start) out.push({x:160,y:96,fn:()=>dialog([["ASH","THE CAGE I SLEPT IN. IT'S WRECKED. IT ISN'T GOING BACK UP."],["ASH","THERE HAS TO BE ANOTHER WAY OUT. ANOTHER LIFT, MAYBE."]])});
   if(r.hole) out.push({x:r.hole.x,y:7*T-4,fn:lookHole});
   if(r.kind==="lockers"&&!G.hide) for(const x of [2,3,4,5,6,7,12,13,14,15,16,17]) if(!isSolid(r.tiles[2*RW+x])) out.push({x:x*T+8,y:2*T+4,fn:()=>startHide(x)});
   return out;
@@ -2478,137 +2484,170 @@ function nearestThing(){
   for(const it of interactables()){const d=dist(it.x,it.y,G.p.x,G.p.y); if(it.low){if(d<24) low=it;} else if(d<bd){bd=d;best=it;}}
   return best||low; // Smudge only answers when nothing else is in reach
 }
-// Ash in the cutscene: always the front-facing idle frame (top-left of the sheet), scaled up
-function bigAsh(x,y,k,rot){
-  const f=sprites.d&&sprites.d[0]; if(!f) return;
-  if(rot!==undefined){ctx.save(); ctx.translate(Math.round(x),Math.round(y)); ctx.rotate(rot); ctx.drawImage(f,-SPR_W*k/2,-SPR_H*k/2,SPR_W*k,SPR_H*k); ctx.restore();}
-  else ctx.drawImage(f,Math.round(x-SPR_W*k/2),Math.round(y-SPR_H*k),SPR_W*k,SPR_H*k);
+/* ================= the opening: framed pictures that pan, words typed underneath, a quiet tune ================= */
+// Ash is homeless. The shelter is full, so he sleeps in the old lift cage at the oil works, where it is warm. In the night it goes down.
+const cutC=mk(320,160), cg=cutC.getContext("2d");
+const C=(c,x,y,w,h)=>px(cg,c,Math.round(x),Math.round(y),w,h);
+function cEll(c,x,y,rx,ry,a){cg.fillStyle=c; cg.beginPath(); cg.ellipse(x,y,rx,ry,a||0,0,7); cg.fill();}
+function cPoly(c,pts){cg.fillStyle=c; cg.beginPath(); pts.forEach(([x,y],i)=>i?cg.lineTo(x,y):cg.moveTo(x,y)); cg.fill();}
+function cSky(top,bot){const g=cg.createLinearGradient(0,0,0,160); g.addColorStop(0,top); g.addColorStop(1,bot); cg.fillStyle=g; cg.fillRect(0,0,320,160);}
+function cGlow(x,y,r,c){const g=cg.createRadialGradient(x,y,0,x,y,r); g.addColorStop(0,c); g.addColorStop(1,"rgba(0,0,0,0)"); cg.globalCompositeOperation="lighter"; cg.fillStyle=g; cg.fillRect(x-r,y-r,r*2,r*2); cg.globalCompositeOperation="source-over";}
+function cSnow(t,n,sp){const r=mulberry(7); for(let i=0;i<n;i++){const k=0.6+r()*0.8, x=((r()*340+t*5*k+Math.sin(t*0.8+i)*6)%340+340)%340-10, y=(r()*170+t*(sp||12)*k)%170-6; C(k>1.1?"#e8e4dc":"#8f8778",x,y,k>1.25?2:1,1);}}
+function cAsh(x,y,set,f){const sp=sprites[set]&&sprites[set][f||0]; if(sp) cg.drawImage(sp,Math.round(x)-8,Math.round(y)-25);}
+function cSteam(x,y,t,n,z){z=z||1; for(let i=0;i<n;i++){const k=(t*0.22+i/n)%1; cEll("rgba(150,145,135,"+(0.32*(1-k)).toFixed(3)+")",x+k*28*z+Math.sin(t+i)*3*z,y-k*36*z,(4+k*10)*z,(3+k*6)*z);}}
+function cWorks(x,y,t,c){ // the oil works on the hill: a derrick, a tank, the chimney that never stops steaming
+  for(let k=0;k<12;k++){const w=Math.round(k*0.7); C(c,x-w,y+k*3,1,3); C(c,x+w,y+k*3,1,3); if(k%3===0) C(c,x-w,y+k*3,w*2+1,1);}
+  cEll(c,x+30,y+30,12,5); C(c,x+18,y+30,24,8); C(c,x-30,y+26,26,14);
+  C(c,x+52,y-12,7,52); for(let k=0;k<5;k++) C("#1a1c26",x+52,y-8+k*9,7,1);
+  cSteam(x+55,y-14,t,6); if(Math.sin(t*3)>0.3) C("#c4473a",x+54,y-15,2,2);
 }
-function poly(pts,c){ctx.fillStyle=c; ctx.beginPath(); pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.fill();}
-function introSky(t,mx,my){
-  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,"#04050a"); g.addColorStop(1,"#13151d"); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  const r=mulberry(77);
-  for(let i=0;i<90;i++){const x=Math.floor(r()*W), y=Math.floor(r()*130), sp=1+r()*3; px(ctx,Math.sin(t*sp+i)>0.9?"#e8e0cc":(i%3?"#4a463c":"#8f8778"),x,y);}
-  ctx.fillStyle="rgba(217,207,184,.05)"; ctx.beginPath(); ctx.arc(mx,my,26,0,7); ctx.fill();
-  ctx.fillStyle="#cfc6a8"; ctx.beginPath(); ctx.arc(mx,my,11,0,7); ctx.fill();
-  px(ctx,"#a89f88",mx-5,my-3,3,2); px(ctx,"#a89f88",mx+2,my+2,4,3); px(ctx,"#a89f88",mx-1,my+5,2,2); px(ctx,"#a89f88",mx+4,my-6,2,2);
-  ctx.fillStyle="rgba(9,10,15,.88)";
-  for(let i=0;i<4;i++){const x=((i*97+t*(5+i*2))%(W+140))-70, y=14+i*16; ctx.beginPath(); ctx.ellipse(x,y,40+i*6,5+i,0,0,7); ctx.ellipse(x+24,y-3,22,4,0,0,7); ctx.fill();}
+function cTown(t,y0){ // rows of houses, warm windows, snow on the roofs
+  const r=mulberry(19);
+  for(let x=-6;x<330;){const w=20+Math.floor(r()*16), h=22+Math.floor(r()*20), y=y0-h;
+    C("#120f10",x,y,w,h); cPoly("#120f10",[[x-2,y],[x+w/2,y-8-r()*5],[x+w+2,y]]); C("#8f8778",x,y-1,w,1);
+    if(r()<0.6) {C("#120f10",x+w-7,y-14,4,10); cSteam(x+w-5,y-16,t*0.6+x,2,0.35);}
+    for(let k=0;k<3;k++) if(r()<0.7){const wx=x+3+Math.floor(r()*(w-8)), wy=y+4+Math.floor(r()*(h-12)), on=Math.sin(t*0.4+wx)>-0.8; C(on?"#e8a94a":"#2a2014",wx,wy,4,4); if(on) C("#fff1c8",wx+1,wy+1,1,1);}
+    x+=w+2+Math.floor(r()*5);}
 }
-function wind(t,n,c){const r=mulberry(5); for(let i=0;i<n;i++){const y=Math.floor(r()*H), x=((r()*W+t*(160+r()*120))%(W+20))-10; px(ctx,c,Math.round(x),y,4+Math.floor(r()*6),1);}}
-function chimneyRim(t,broken){
-  const cx=160, cy=150;
-  ctx.fillStyle="#2c2723"; ctx.beginPath(); ctx.ellipse(cx,cy,136,36,0,0,7); ctx.fill();
-  ctx.fillStyle="#3a332c"; ctx.beginPath(); ctx.ellipse(cx,cy-3,136,33,0,Math.PI,0); ctx.fill();
-  for(let a=0;a<6.28;a+=0.21){const x=cx+Math.cos(a)*120, y=cy+Math.sin(a)*30; px(ctx,"#1a1714",Math.round(x),Math.round(y)-2,1,5);}
-  ctx.fillStyle="#010101"; ctx.beginPath(); ctx.ellipse(cx,cy+3,108,24,0,0,7); ctx.fill();
-  ctx.fillStyle="#0b0908"; ctx.beginPath(); ctx.ellipse(cx,cy+3,108,24,0,Math.PI,0); ctx.fill();
-  if(broken){ctx.fillStyle="#010101"; ctx.beginPath(); ctx.ellipse(cx,cy-24,26,10*broken,0,0,7); ctx.fill();}
-  // soot streaks down the outside, and the painted year
-  for(let i=0;i<9;i++) px(ctx,"#1a1714",30+i*31,cy+28,2,14);
-  text(ctx,"1889",cx,cy+24,1,"#4a3f33","c");
+function cLamp(x,y,t){C("#2a2622",x,y,2,160-y); C("#3a3530",x-4,y-2,10,3); C(Math.sin(t*7)>0.95?"#a8642a":"#f2c35a",x-2,y+1,6,2);
+  cPoly("rgba(232,169,74,.07)",[[x-2,y+3],[x+4,y+3],[x+40,160],[x-38,160]]); cGlow(x+1,y+4,26,"rgba(232,169,74,.35)");}
+function cBlanket(x,y,w,h){cEll("#4a5a7a",x,y,w,h); for(let i=-2;i<=2;i++) C("#6a7a9a",x+i*w/3-1,y-h+2,2,h*2-3);}
+function cutTown(t){
+  cSky("#090b14","#1e2234"); const r=mulberry(11); for(let i=0;i<40;i++) C(Math.sin(t*2+i)>0.6?"#cfc6b0":"#4a463c",r()*320,r()*56,1,1);
+  cPoly("#1c2030",[[0,86],[60,66],[120,76],[190,36],[240,48],[320,42],[320,160],[0,160]]);
+  cWorks(230,40,t,"#07080d");
+  cTown(t,150); C("#1c1d24",0,150,320,10); C("#8f8778",0,150,320,1);
+  cLamp(150,104,t); cAsh(158,156,"u",0); cSnow(t,70);
 }
-function renderIntroPanel(n,t){
+function cutShelter(t){
+  C("#3a2620",0,0,320,160); for(let y=2;y<160;y+=6){C("#2a1a16",0,y,320,1); for(let x=((y/6)%2)*9;x<320;x+=18) C("#2a1a16",x,y-5,1,5);}
+  C("#1c120c",112,56,62,98); C("#2a1d14",118,62,50,92); C("#1c120c",142,62,2,92);
+  C("#e8a94a",124,68,36,12); for(let k=0;k<4;k++) C("#a8642a",124,70+k*3,36,1); cGlow(142,74,30,"rgba(232,169,74,.3)");
+  C("#2a1d14",96,30,96,14); text(cg,"MILL ST SHELTER",144,34,1,"#cfc6a8","c");
+  C("#cfc6a8",126,96,34,16); C("#a89f88",126,111,34,1); text(cg,"FULL",143,101,1,"#7a2a22","c");
+  C("#2a2622",100,150,86,4); C("#8f8778",100,149,86,1); C("#1c1d24",0,154,320,6); C("#8f8778",0,154,320,1);
+  cGlow(143,52,22,"rgba(232,169,74,.4)"); C("#f2c35a",140,50,6,2);
+  cAsh(226,154,"l",0); cBlanket(214,134,7,4); cSnow(t,60);
+}
+function cutBench(t){
+  cSky("#080a12","#191d2c"); cPoly("#11131d",[[0,70],[50,50],[110,60],[170,74],[320,80],[320,160],[0,160]]);
+  cWorks(46,30,t,"#0a0c12"); cGlow(100,30,40,"rgba(168,100,42,.18)"); // the works, warm on the hill
+  C("#1c1d24",0,124,320,36); C("#8f8778",0,124,320,1);
+  cLamp(240,46,t);
+  C("#2a1d14",156,116,84,4); C("#3b2b1b",156,112,84,4); C("#2a1d14",160,120,3,14); C("#2a1d14",232,120,3,14); C("#3b2b1b",156,100,84,3); C("#8f8778",156,99,84,1); C("#8f8778",156,111,40,1);
+  cAsh(196,124,"d",0); cBlanket(196,114,12,6);
+  for(let i=0;i<3;i++){const k=(t*0.5+i/3)%1; cEll("rgba(220,220,220,"+(0.22*(1-k)).toFixed(3)+")",196+k*6,90-k*14,2+k*4,2+k*3);} // his breath
+  cSnow(t,80);
+}
+function cutFence(t){
+  cSky("#0a0b12","#1a1d28");
+  C("#14161c",0,40,140,120); C("#14161c",180,28,140,132); C("#2a2622",0,70,320,4); C("#2a2622",200,40,4,120);
+  for(const [x,y] of [[40,60],[230,52],[290,90]]) {C("#a8642a",x,y,8,4); cGlow(x+4,y+2,22,"rgba(232,140,60,.35)");}
+  cSteam(250,30,t,5); cSteam(60,44,t+2,4);
+  C("#1c1d24",0,148,320,12); C("#8f8778",0,148,320,1);
+  for(let x=0;x<320;x+=8) for(let y=46;y<148;y+=8){ if(x>146&&x<180&&y>96) continue; C("#5a5a54",x+(y%16?4:0),y,1,1); C("#4a4a44",x+2+(y%16?4:0),y+2,1,1);} // chain link
+  for(let x=0;x<330;x+=40) C("#3a3a36",x,40,3,110);
+  for(let x=0;x<320;x+=6) C("#5a5a54",x,42+(x%12?0:2),4,1); // barbed wire
+  cPoly("#4a4a44",[[146,96],[150,90],[176,90],[180,96]]); // the peeled-back gap
+  C("#7a3a1f",44,88,52,18); C("#5a2414",44,104,52,2); C("#3e1410",60,90,3,6); text(cg,"KEEP OUT",70,93,1,"#d9cfb8","c");
+  cAsh(164,150,"r",1); cSnow(t,60);
+}
+function cutCage(t){
+  C("#1c1a17",0,0,320,160); for(let x=0;x<320;x+=4) C("#24221e",x,0,1,130);
+  C("#2a2622",0,128,320,32); C("#050505",112,130,96,30); cGlow(160,175,70,"rgba(168,100,42,.55)");
+  for(let i=0;i<4;i++){const y=150-((t*20+i*9)%30); for(let x=118;x<204;x+=3) C("rgba(232,169,74,.12)",x,y+Math.round(Math.sin(x*0.4+t*3)*1.5),2,1);} // warm air coming up the shaft
+  C("#2a2622",159,0,2,40); C("#4a4540",112,38,96,3); C("#4a4540",112,124,96,4);
+  for(let x=114;x<=206;x+=8) if(x<200||x>206) C("#3a3530",x,41,2,83);
+  for(let i=0;i<5;i++) C("#3a3530",208+i*4,44+i*2,2,78-i*2); // the gate, left open
+  cg.save(); cg.translate(150,44); cg.rotate(0.06); C("#8a7a3a",-37,0,78,10); text(cg,"OUT OF ORDER",2,2,1,"#2a1d14","c"); cg.restore();
+  cBlanket(160,120,30,5);
+  const sp=sprites.d&&sprites.d[0]; if(sp){cg.save(); cg.translate(146,120+Math.round(Math.sin(t*1.5))); cg.rotate(-Math.PI/2); cg.drawImage(sp,-13,-8); cg.restore();} // asleep, curled up
+  cBlanket(174,119,16,4);
+  C(Math.sin(t*9)>0.9?"#5a4a2a":"#c9a04a",192,22,4,4); cGlow(194,24,24,"rgba(232,190,90,.25)");
+  for(let i=0;i<3;i++){const k=(t*0.4+i/3)%1; text(cg,"Z",172+k*14,100-k*24,1,"rgba(207,198,176,"+(1-k).toFixed(2)+")");}
+  C("#3a4a5a",292,40,10,88); cSnow(t*0.5,6); // snow past the door
+}
+function cutDrop(t){
+  C("#221d18",0,0,320,160);
+  for(let i=0;i<26;i++){const x=(i*53)%320, y=((i*37-t*320)%180+180)%180-10; C("#3a3028",x,y,2,14);} // rock rushing up past
+  for(const x of [100,220]){C("#3a3530",x,0,4,160); for(let y=(-t*320)%16;y<160;y+=16) C("#5a4f45",x+1,Math.round(y)+16,2,2);}
+  const j=Math.round((fxRnd()-0.5)*3);
+  cg.save(); cg.translate(j,0);
+  C("#4a4540",112,30,96,3); C("#4a4540",112,128,96,4); for(let x=114;x<=206;x+=8) C("#3a3530",x,33,2,95);
+  cBlanket(160,124,30,4); cAsh(160,126,"d",0);
+  const sw=Math.sin(t*6)*6; C("#2a2622",160+sw/3,33,1,10); C(Math.floor(t*10)%3?"#c9a04a":"#5a4a2a",158+sw,42,4,4);
+  cg.restore();
+  for(let i=0;i<8;i++) if(fxRnd()<0.5) C(i%2?"#f2c35a":"#e8a94a",(i<4?104:216)+fxRnd()*8-4,40+fxRnd()*80,1,1); // sparks off the rails
+  if(Math.sin(t*8)>0) C("#c4473a",300,8,6,6);
+  text(cg,"DEPTH "+String(Math.min(900,Math.floor(t*130))).padStart(3,"0")+" FT",10,8,1,"#e8a94a");
+}
+function cutThud(t){ C("#000",0,0,320,160); const r=mulberry(3); for(let i=0;i<40;i++) C("#3a3026",r()*320,(r()*160+t*(10+r()*20))%160,1,1); }
+function cutWake(t){
+  C("#0b0a09",0,0,320,160); C("#1a1714",0,108,320,52); for(let x=0;x<320;x+=40) C("#141210",x,108,1,52);
+  C("#2a2622",159,0,2,56); C("#4a4540",157,56,1,3); C("#4a4540",161,55,1,4); // the cable it hung from, snapped
+  for(let i=0;i<8;i++){const bx=82+i*9, lean=i>2&&i<6?(i-2)*4:0; C("#3a3530",bx+lean,64,2,48);} C("#4a4540",80,62,76,3); C("#4a4540",76,110,84,4);
+  cPoly("#1c1a17",[[80,62],[104,54],[126,70],[156,58],[156,64],[80,66]]);
+  cEll("#3a3026",192,144,30,7); cEll("#2a2420",176,142,10,4); cBlanket(204,146,18,4);
+  cAsh(192,146,"d",0);
+  cg.drawImage(lanternIcon(2,100,t),214,130,10,16); cGlow(219,134,80,"rgba(232,169,74,.45)");
+  const v=cg.createRadialGradient(205,130,20,205,130,170); v.addColorStop(0,"rgba(0,0,0,0)"); v.addColorStop(1,"rgba(0,0,0,.9)"); cg.fillStyle=v; cg.fillRect(0,0,320,160);
+  const o=t<0.5?t/0.5*0.3:t<0.75?0.3-(t-0.5)/0.25*0.3:clamp((t-0.75)/1,0,1), lid=Math.round((1-o)*80); // eyes opening: lids, one blink
+  C("#000",0,0,320,lid); C("#000",0,160-lid,320,lid);
+}
+function cutEyes(t){
+  C("#000",0,0,320,160); cg.drawImage(lanternIcon(2,100,t),66,132,10,16); cGlow(71,138,50,"rgba(232,169,74,.22)");
+  cEll("#08070c",243,74,18,9); cEll("#08070c",243,74,9,14);
+  const h=t<1.2?0:Math.min(2,Math.round((t-1.2)*3)); if(h&&Math.floor(t*3)%11) {C("#f6e7a6",238,73-h/2,2,h); C("#f6e7a6",247,73-h/2,2,h);}
+}
+// the tune: a slow minor phrase on each picture, falling to a low note as the cage drops
+const N={A2:110,E3:164.8,A3:220,B3:246.9,C4:261.6,D4:293.7,E4:329.6,F4:349.2,G4:392,A4:440};
+const OPENING=[
+  {draw:cutTown,pan:[0,40,80,40],tune:"E4 A4 G4 E4 D4 E4 C4 A3",lines:[["","MOUNT HOLLOW KEEPS A WARM BED FOR EVERYONE."],["","ALMOST EVERYONE."]]},
+  {draw:cutShelter,pan:[70,40,30,40],tune:"C4 E4 D4 C4 B3 C4 A3",lines:[["","THE SHELTER ON MILL STREET WAS FULL AGAIN."],["ASH","...YEAH. I KNOW. NEXT TIME."]]},
+  {draw:cutBench,pan:[80,30,0,0],tune:"A3 C4 E4 G4 F4 E4 D4 E4",lines:[["","EVERYONE SAYS TO STAY AWAY FROM THE OLD OIL WORKS."],["","BUT ITS CHIMNEY HAS STEAMED EVERY NIGHT FOR FORTY YEARS. UP THERE IT IS ALWAYS WARM."]]},
+  {draw:cutFence,pan:[0,38,70,38],tune:"E4 G4 A4 G4 E4 D4 C4 D4",lines:[["ASH","WARM AND FORBIDDEN BEATS FROZEN ON A BENCH."]]},
+  {draw:cutCage,pan:[40,0,40,40],tune:"C4 E4 A4 G4 E4 C4 D4 E4",lines:[["","INSIDE THE GATE STOOD AN OLD LIFT CAGE. WARM AIR CAME UP THE SHAFT."],["ASH","JUST FOR ONE NIGHT."]]},
+  {draw:cutDrop,pan:[40,0,40,40],sfx:"rumble",tune:"A4 G4 E4 D4 C4 A3 E3 A2",beat:0.3,lines:[["","IN THE NIGHT, THE CAGE BEGAN TO MOVE."],["","IT DID NOT STOP UNTIL 900 FEET."]]},
+  {draw:cutThud,pan:[40,20,40,20],sfx:"thud",lines:[["","THUD."]]},
+  {draw:cutWake,pan:[40,30,40,10],tune:"A3 - C4 E4",beat:0.7,lines:[["","ASH WAKES ON A PILE OF OILY RAGS. A LANTERN IS BURNING BESIDE HIM."],["ASH","...THIS ISN'T WHERE I FELL ASLEEP."],["ASH","AND I DEFINITELY DIDN'T BRING A LANTERN."]]},
+  {draw:cutEyes,pan:[40,20,40,20],sfx:"whisper",lines:[["","SOMEWHERE IN THE DARK, SOMETHING NOTICED THE LIGHT."]]}
+];
+function playTune(P){ if(!SW.music) return; const b=P.beat||0.42; P.tune.split(" ").forEach((n,i)=>{ if(N[n]) tone({type:"triangle",f0:N[n],dur:b*1.6,gain:0.05,attack:0.03,delay:i*b}); }); }
+function startCut(list){ G.cut={list,i:0,li:0,t:0,shown:0,wait:0,out:0,hold:0}; startPanel(); }
+function startPanel(){ const P=G.cut.list[G.cut.i]; if(P.sfx) sfx[P.sfx](0); if(P.tune) playTune(P); }
+function cutAdvance(){ const c=G.cut, P=c.list[c.i]; if(c.li<P.lines.length-1){c.li++; c.shown=0; c.wait=0;} else c.out=0.5; }
+function endCut(){ G.cut=null; keys.delete("Space"); introDone(); }
+function cutKey(){ const c=G.cut, L=c.list[c.i].lines[c.li]; if(c.out>0) return; if(c.t<0.6) c.t=0.6; else if(c.shown<L[1].length) c.shown=L[1].length; else cutAdvance(); }
+function updCut(dt){
+  const c=G.cut, P=c.list[c.i]; c.t+=dt;
+  if(keys.has("Space")){ if((c.hold+=dt)>1.2){ endCut(); return; } } else c.hold=0; // holding the key skips it all
+  if(c.out>0){ if((c.out-=dt)<=0){ if(++c.i>=c.list.length){ endCut(); return; } c.li=0; c.shown=0; c.wait=0; c.t=0; c.out=0; startPanel(); } return; }
+  if(c.t<0.6) return; // fading in
+  const L=P.lines[c.li], n=L[1].length;
+  if(c.shown<n){ const b=Math.floor(c.shown); c.shown=Math.min(n,c.shown+dt*28); if(Math.floor(c.shown)>b&&b%2===0&&L[1][b]!==" ") tone({type:"square",f0:L[0]==="ASH"?300:200,dur:0.03,gain:0.02}); }
+  else if((c.wait+=dt)>(c.li===P.lines.length-1?2.2:1.4)) cutAdvance(); // each picture moves on by itself
+}
+function renderCut(){
+  const c=G.cut, P=c.list[c.i];
   ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
-  if(n===0){ // the town and the mountain
-    introSky(t,262,30);
-    px(ctx,"#07080b",0,148,W,44); ctx.save(); ctx.translate(0,-40);
-    poly([[0,148],[60,118],[110,100],[150,76],[170,76],[205,96],[260,114],[320,128],[320,192],[0,192]],"#0d0e14");
-    poly([[0,160],[90,140],[160,150],[240,138],[320,150],[320,192],[0,192]],"#0a0b10");
-    px(ctx,"#16171d",151,40,18,38); px(ctx,"#1e1f26",149,37,22,4); for(let k=0;k<6;k++) px(ctx,"#121318",151,45+k*6,18,1);
-    if(Math.sin(t*3)>0.55) px(ctx,"#c4473a",159,34,2,2);
-    ctx.fillStyle="rgba(42,44,56,.2)"; for(let i=0;i<3;i++){const x=((t*9+i*140)%(W+220))-110; ctx.beginPath(); ctx.ellipse(x,150+i*7,95,6,0,0,7); ctx.fill();}
-    const tr=mulberry(31);
-    for(let x=-4;x<W;){
-      const w=10+Math.floor(tr()*14), h=8+Math.floor(tr()*14), y=192-h;
-      px(ctx,"#07080b",x,y,w,h); px(ctx,"#07080b",x+2,y-3,w-4,3);
-      for(let k=0;k<2;k++) if(tr()<0.6){const wx=x+2+Math.floor(tr()*(w-4)), wy=y+3+Math.floor(tr()*Math.max(1,h-6)); if(Math.sin(t*0.6+wx*1.7)>-0.7) px(ctx,"#e8a94a",wx,wy,2,2);}
-      x+=w+1+Math.floor(tr()*4);
-    }
-    ctx.restore();
-  } else if(n===1){ // the fence. Ash walks through the gap
-    introSky(t,64,26);
-    ctx.save(); ctx.translate(0,-40);
-    const cx=222;
-    px(ctx,"#15161c",cx-36,0,72,150);
-    for(let y=0;y<150;y+=5){px(ctx,"#0e0f13",cx-36,y,72,1); for(let x=(y/5)%2?0:8;x<72;x+=16) px(ctx,"#0e0f13",cx-36+x,y,1,5);}
-    text(ctx,"1889",cx,52,2,"#26231f","c");
-    px(ctx,"#0a0b0e",0,150,W,42);
-    ctx.strokeStyle="#2a2c33"; ctx.lineWidth=1;
-    for(let x=-40;x<W;x+=7){ if(x>78&&x<134) continue; ctx.beginPath(); ctx.moveTo(x,112); ctx.lineTo(x+40,152); ctx.moveTo(x+40,112); ctx.lineTo(x,152); ctx.stroke(); }
-    for(let x=10;x<W;x+=64) if(x<78||x>134) px(ctx,"#3a3530",x,106,3,48);
-    px(ctx,"#3a3530",0,111,78,2); px(ctx,"#3a3530",134,111,W-134,2);
-    px(ctx,"#0a0b0e",0,192,W,40); px(ctx,"#3a2a1a",158,118,82,22); px(ctx,"#2c1f13",158,139,82,1);
-    text(ctx,"KEEP OUT",199,122,1,BLOOD,"c"); text(ctx,"HOLLOW CREEK",199,131,1,INK3,"c");
-    const k=clamp(t/1.8,0,1), x=-20+130*k, bob=k<1&&Math.floor(t*7)%2?1:0;
-    bigAsh(x,182-bob,3);
-    ctx.restore();
-    wind(t,14,"rgba(143,135,120,.28)");
-  } else if(n>=2&&n<=4){ // the rim of the chimney
-    const sh=n===4&&t<1.2?(fxRnd()-0.5)*5:0;
-    ctx.save(); ctx.translate(Math.round(sh),Math.round(sh*0.6));
-    introSky(t,250,22);
-    ctx.translate(0,-42); px(ctx,"#0a0908",0,150,W,90);
-    const crumble=n===4?clamp(t/0.5,0,1):0;
-    chimneyRim(t,crumble);
-    if(n===3||n===4){ // eyes at the bottom of the hole
-      const blink=Math.floor(t*10)%23===0;
-      const a=n===3?clamp(t/1.2,0,1):1;
-      if(!blink){ctx.fillStyle="rgba(232,228,220,"+(0.85*a)+")"; ctx.fillRect(150,160,3,2); ctx.fillRect(166,160,3,2); px(ctx,"#000",151,160); px(ctx,"#000",167,160);}
-    }
-    if(n===4){
-      const f=clamp((t-0.35)/0.9,0,1);
-      ctx.save(); ctx.beginPath(); ctx.rect(0,-50,W,178); ctx.ellipse(160,153,108,24,0,0,7); ctx.clip(); // he goes into the hole, not in front of it
-      bigAsh(160,126-SPR_H*1.5+f*f*110,3,f*1.4);
-      ctx.restore();
-      const r=mulberry(9);
-      for(let i=0;i<12;i++){const bx=134+r()*52, by=124+(t*(60+r()*90))+r()*8; if(by<190) px(ctx,i%2?"#3a332c":"#2c2723",Math.round(bx),Math.round(by),3+Math.floor(r()*3),2);}
-      ctx.fillStyle="rgba(120,110,95,"+clamp(0.4-t*0.3,0,1)+")"; ctx.beginPath(); ctx.ellipse(160,126,30+t*20,6+t*4,0,0,7); ctx.fill();
-    } else bigAsh(160,126+(Math.floor(t*2)%2),3);
-    wind(t,10,"rgba(143,135,120,.25)");
-    ctx.restore();
-  } else if(n===5){ // the fall
-    px(ctx,"#030303",0,0,W,H);
-    const R=Math.max(3,34-t*16);
-    ctx.fillStyle="#12141c"; ctx.beginPath(); ctx.ellipse(160,6,R*1.7,R*0.6,0,0,7); ctx.fill();
-    const sc=(t*430)%10;
-    for(let y=-10;y<H+10;y+=10){const yy=Math.round(y-sc); px(ctx,"#16130f",0,yy,44,9); px(ctx,"#16130f",276,yy,44,9); px(ctx,"#0a0908",0,yy+9,44,1); px(ctx,"#0a0908",276,yy+9,44,1); px(ctx,"#0a0908",((y/10)%2?20:6),yy,1,9); px(ctx,"#0a0908",((y/10)%2?296:310),yy,1,9);}
-    const r=mulberry(3);
-    for(let i=0;i<26;i++){const x=52+r()*216, y=(r()*H+H-((t*(380+r()*240))%(H+40)))%(H+40)-20; px(ctx,"#2a2724",Math.round(x),Math.round(y),1,7+Math.floor(r()*8));}
-    for(let i=0;i<6;i++){const x=70+r()*180, y=H-((t*(40+r()*50)+r()*H)%(H+20)); px(ctx,"#3a332c",Math.round(x),Math.round(y),3,2);}
-    bigAsh(160+Math.sin(t*2)*8,96,3,t*4.2);
-  } else if(n===6){ // THUD
-    px(ctx,"#000",0,0,W,H);
-    if(t>0.12){const s2=t<0.5?(fxRnd()-0.5)*6:0; ctx.globalAlpha=clamp(1.6-t,0.25,1); text(ctx,"THUD.",W/2+s2,70,4,INK2,"c"); ctx.globalAlpha=1;}
-    const r=mulberry(12); for(let i=0;i<30;i++){const x=r()*W, y=(r()*H*0.6+t*(14+r()*20))%H; px(ctx,"#2a2724",Math.round(x),Math.round(y));}
-  } else { // waking up next to a lantern that isn't his
-    if(!titleRoom){titleRoom={nb:{},seed:31337,kind:"plain"}; buildRoom(titleRoom,true,false); titleRoom.canvas=paintRoom(titleRoom);}
-    ctx.drawImage(titleRoom.canvas,0,0);
-    ctx.fillStyle="#3a3328"; ctx.beginPath(); ctx.ellipse(146,124,34,9,0,0,7); ctx.fill();
-    ctx.fillStyle="#2a2620"; ctx.beginPath(); ctx.ellipse(132,121,12,5,0,0,7); ctx.ellipse(160,126,10,4,0,0,7); ctx.fill();
-    px(ctx,"#4a3f33",120,118,8,2); px(ctx,"#1a1714",150,121,9,2);
-    const passing=n===8&&t>0.3&&t<2.6;
-    if(n===8&&passing) drawMoth(ctx,40+(t-0.3)/2.3*240,58+Math.sin(t*5)*6,t);
-    bigAsh(140,126,2);
-    const fl=passing?0.75+fxRnd()*0.35:1+Math.sin(t*13)*0.03+(fxRnd()-0.5)*0.05;
-    const rr=(n===7?Math.min(60,20+t*40):60)*fl;
-    dg.globalCompositeOperation="source-over"; dg.clearRect(0,0,W,H); dg.fillStyle="rgba(1,1,2,.985)"; dg.fillRect(0,0,W,H);
-    dg.globalCompositeOperation="destination-out";
-    const gr=dg.createRadialGradient(176,104,0,176,104,rr); gr.addColorStop(0,"rgba(0,0,0,1)"); gr.addColorStop(0.55,"rgba(0,0,0,.9)"); gr.addColorStop(1,"rgba(0,0,0,0)");
-    dg.fillStyle=gr; dg.beginPath(); dg.arc(176,104,rr,0,7); dg.fill();
-    ctx.drawImage(darkC,0,0);
-    ctx.drawImage(lanternIcon(2,100,t),170,94,10,16);
-    if(n===8&&t>2.8&&Math.floor(t*4)%9){px(ctx,"#f6e7a6",246,84); px(ctx,"#f6e7a6",249,84);}
-    if(n===7){ // eyes opening: two lids, one blink
-      const o=t<0.45?t/0.45*0.35:t<0.65?0.35-(t-0.45)/0.2*0.35:clamp((t-0.65)/0.9,0,1);
-      const lid=Math.round((1-o)*H/2);
-      px(ctx,"#000",0,0,W,lid); px(ctx,"#000",0,H-lid,W,lid);
-    }
+  cg.setTransform(1,0,0,1,0,0); cg.imageSmoothingEnabled=false; P.draw(c.t);
+  const est=P.est||(P.est=0.6+P.lines.reduce((a,l)=>a+l[1].length/28+1.6,0)+0.8), k=clamp(c.t/est,0,1), e=k*k*(3-2*k); // a slow pan across the picture
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(cutC,Math.round(P.pan[0]+(P.pan[2]-P.pan[0])*e),Math.round(P.pan[1]+(P.pan[3]-P.pan[1])*e),240,120,40,12,240,120);
+  ctx.globalCompositeOperation="multiply"; px(ctx,"#e6cfa8",40,12,240,120); ctx.globalCompositeOperation="source-over"; // one warm, faded palette
+  for(let i=0;i<40;i++) px(ctx,"rgba(232,220,200,.07)",40+Math.floor(fxRnd()*240),12+Math.floor(fxRnd()*120)); // grain
+  const fade=c.out>0?1-c.out/0.5:c.t<0.6?1-c.t/0.6:0;
+  if(fade>0){ctx.globalAlpha=fade; px(ctx,"#000",40,12,240,120); ctx.globalAlpha=1;}
+  px(ctx,"#3a3026",39,11,242,1); px(ctx,"#3a3026",39,132,242,1); px(ctx,"#3a3026",39,11,1,122); px(ctx,"#3a3026",280,11,1,122);
+  if(c.t>=0.6){ // the words, typed under the picture, in Ash's colour when he speaks
+    const L=P.lines[c.li]; let left=Math.floor(c.shown); ctx.globalAlpha=1-fade;
+    wrapText(L[1],46).forEach((l,i)=>{ if(left>0) text(ctx,l.slice(0,left),W/2-textW(l,1)/2,146+i*11,1,L[0]==="ASH"?SPEAKERS.ASH.c:INK); left-=l.length+1; });
+    ctx.globalAlpha=1;
   }
-  text(ctx,(touchMode()?"PAUSE":K("pause"))+": SKIP",6,6,1,INK3,"l","#000");
+  text(ctx,"HOLD "+(touchMode()?"USE":K("use"))+" TO SKIP",W-6,H-9,1,"#3a3530","r");
 }
 function renderGame(){
-  if(G.introPanel!=null){renderIntroPanel(G.introPanel,titleT-(G.panelAt||0)); if(G.dlg) renderDialog(); return;}
+  if(G.cut){renderCut(); return;}
   const sh=G.shake>0?[(fxRnd()-0.5)*G.shake,(fxRnd()-0.5)*G.shake]:[0,0];
   ctx.setTransform(1,0,0,1,Math.round(sh[0]),Math.round(sh[1]));
   const p=G.p, t=G.elapsed;
@@ -2785,7 +2824,7 @@ const PMIN=36, PMAX=92; let PW=PMIN, quickHits=[];
 const faceC=mk(PN,PN), faceG=faceC.getContext("2d");
 function drawPanels(){
   for(const [g,edge] of [[plc,PW-1],[prc,0]]){ g.imageSmoothingEnabled=false; g.fillStyle=G&&mode!=="title"?"#0b0a09":"#050505"; g.fillRect(0,0,PW,H); if(G&&mode!=="title") px(g,"#1c1a17",edge,0,1,H); }
-  if(!G||mode==="title"||G.introPanel!=null) return;
+  if(!G||mode==="title"||G.cut) return;
   const slim=PW<60, c=Math.round(PW/2);
   // LEFT: map, lantern with fuel bar, quick slots
   const cw=slim?3:clamp(Math.floor((PW-10)/9),4,9), ch=slim?2:Math.max(3,Math.round(cw*0.66));
@@ -2881,7 +2920,7 @@ function lanternIcon(level,fuel,t){
 }
 
 /* ================= title, pause and end, drawn on the canvas ================= */
-let titleT=0, titleRoom=null;
+let titleT=0;
 function owned(){const s=Object.assign({endings:{}},loadSave()); return LANTERNS.filter(l=>l.has(s));}
 function curLantern(){const s=loadSave(), o=owned(); return o.find(l=>l.id===s.lantern)||o[0];}
 function cycleLantern(d){const o=owned(), c=curLantern(), i=(o.indexOf(c)+d+o.length)%o.length; const s=loadSave(); s.lantern=o[i].id; writeSave(s);}
@@ -2953,26 +2992,37 @@ function drawMenu(m,y0){
     menuRow("YES",W/2-28,y+26,m.confirm.sel===0,false,40); menuRow("NO",W/2+28,y+26,m.confirm.sel===1,false,40);
   }
 }
+function poly(pts,c){ctx.fillStyle=c; ctx.beginPath(); pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.fill();}
+function rustPlate(x,y,w,h){ // the menu sits on an old riveted plate
+  px(ctx,"rgba(22,14,10,.92)",x,y,w,h); px(ctx,"#5a3a22",x,y,w,1); px(ctx,"#2a1a10",x,y+h-1,w,1); px(ctx,"#4a2e1a",x,y,1,h); px(ctx,"#2a1a10",x+w-1,y,1,h);
+  for(const [rx,ry] of [[x+3,y+3],[x+w-5,y+3],[x+3,y+h-5],[x+w-5,y+h-5]]){px(ctx,"#7a5233",rx,ry,2,2); px(ctx,"#3e1410",rx+1,ry+2,1,3);}
+  for(let i=0;i<5;i++) px(ctx,"rgba(122,58,31,.35)",x+12+i*33,y+1,2,4+(i%3)*3);
+}
 function renderTitle(){
-  if(!titleRoom){titleRoom={nb:{},seed:31337,kind:"plain"}; buildRoom(titleRoom,true,false); titleRoom.canvas=paintRoom(titleRoom);}
-  ctx.drawImage(titleRoom.canvas,0,0);
-  const lx=160, ly=92, t=titleT, lan=curLantern();
-  const rr=40*lan.radius*(1+Math.sin(t*13)*0.03+(fxRnd()-0.5)*0.05);
-  const mx=lx+Math.cos(t*1.3)*28+Math.sin(t*3.1)*6, my=ly-6+Math.sin(t*1.3)*12+Math.cos(t*2.3)*4;
-  drawMoth(ctx,mx,my,t);
-  dg.globalCompositeOperation="source-over"; dg.clearRect(0,0,W,H); dg.fillStyle="rgba(1,1,2,.985)"; dg.fillRect(0,0,W,H);
-  dg.globalCompositeOperation="destination-out";
-  const gr=dg.createRadialGradient(lx,ly,0,lx,ly,rr); gr.addColorStop(0,"rgba(0,0,0,1)"); gr.addColorStop(0.55,"rgba(0,0,0,.9)"); gr.addColorStop(1,"rgba(0,0,0,0)");
-  dg.fillStyle=gr; dg.beginPath(); dg.arc(lx,ly,rr,0,7); dg.fill();
-  ctx.drawImage(darkC,0,0);
-  ctx.drawImage(lanternIcon(2,100,t),lx-10,ly-14,20,32);
+  const t=titleT, lan=curLantern();
+  const sky=ctx.createLinearGradient(0,0,0,H); sky.addColorStop(0,"#05060b"); sky.addColorStop(1,"#171b28"); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+  const r=mulberry(77); for(let i=0;i<50;i++){const x=Math.floor(r()*W), y=Math.floor(r()*90); if(Math.sin(t*(1+r()*2)+i)>0.2) px(ctx,"#4a463c",x,y);}
+  poly([[180,192],[220,112],[262,100],[320,96],[320,192]],"#0c0e15"); // the works, behind
+  ctx.fillStyle="#0c0e15"; ctx.beginPath(); ctx.ellipse(286,96,16,6,0,0,7); ctx.fill(); px(ctx,"#0c0e15",270,96,32,14); px(ctx,"#0c0e15",246,72,3,40);
+  const tr=mulberry(31); for(let i=0;i<34;i++){const x=250+Math.floor(tr()*68), y=150+Math.floor(tr()*40); if(Math.sin(t*0.6+i*1.7)>-0.6) px(ctx,"#e8a94a",x,y,2,1);} // the town, far below
+  px(ctx,"#1a1412",6,30,26,162); for(let k=0;k<9;k++) px(ctx,"#241c18",6,40+k*18,26,1); px(ctx,"#2a201a",3,24,32,7); // the chimney
+  if(Math.sin(t*3)>0.3) px(ctx,"#c4473a",18,20,2,2);
+  for(let i=0;i<6;i++){const k=(t*0.18+i/6)%1; ctx.fillStyle="rgba(150,145,135,"+(0.28*(1-k)).toFixed(3)+")"; ctx.beginPath(); ctx.ellipse(19+k*40,20-k*30,4+k*12,3+k*6,0,0,7); ctx.fill();}
+  const ax=44, ay=191, lx=58, ly=176; // Ash at its foot, with his lantern
+  const glow=ctx.createRadialGradient(lx,ly,0,lx,ly,46*lan.radius); glow.addColorStop(0,"rgba(232,169,74,.35)"); glow.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.globalCompositeOperation="lighter"; ctx.fillStyle=glow; ctx.fillRect(0,120,120,72); ctx.globalCompositeOperation="source-over";
+  if(sprites.d) ctx.drawImage(sprites.d[0],ax-8,ay-25);
+  ctx.drawImage(lanternIcon(2,100,t),lx-5,ly-8,10,16);
+  if(t%14>9){const a=t*2.2; drawMoth(ctx,lx+Math.cos(a)*16,ly-10+Math.sin(a*1.3)*8,t);} // now and then, the Moth comes to the light
+  { const s0=mulberry(9); for(let i=0;i<70;i++){const k=0.6+s0()*0.8, x=((s0()*340+t*5*k+Math.sin(t*0.8+i)*6)%340+340)%340-10, y=(s0()*200+t*12*k)%200-6; px(ctx,k>1.1?"#e8e4dc":"#8f8778",Math.round(x),Math.round(y),k>1.25?2:1,1);} } // snow
   text(ctx,"LAST LIGHT",W/2,12,4,FLAME,"c",EMBER);
+  { const i=Math.floor(t*0.7)%10, on=Math.sin(t*23)>0.2||Math.floor(t*0.7*7)%5; if(!on&&i!==4) px(ctx,"rgba(5,6,11,.75)",W/2-118+i*24,12,20,28); } // a letter flickers, like an old sign
   text(ctx,"FIND A WAY OUT BEFORE THE LIGHT RUNS OUT.",W/2,47,1,INK2,"c");
   const sv=loadSave();
   const found=Object.keys(sv.endings||{}).filter(k=>ENDING_IDS.includes(k)).length, notes=(sv.notes||[]).length;
   if(sv.runs) text(ctx,"ENDINGS "+found+"/"+ENDING_IDS.length+"   NOTES "+notes+"/"+NOTES.length+"   LANTERNS "+owned().length+"/"+LANTERNS.length,W/2,57,1,INK3,"c");
   const tm=settingsOpen?setMenu:titleMenu, nI=tm.items().length, mny=settingsOpen?120:106;
-  uiFrame(ctx,W/2-86,mny-7,172,nI*10+9,INK3,"rgba(5,5,5,.82)","#1c1a17");
+  rustPlate(W/2-86,mny-7,172,nI*10+9);
   drawMenu(tm,mny);
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,184,1,FLAME,"c","#000");
   else if(settingsOpen) text(ctx,["TIPS LIKE: THE LANTERN IS RUNNING LOW.","AUTO PICKS KEYBOARD OR TOUCH FOR THIS DEVICE.","CHANGE WHICH KEY DOES WHAT.","ESC: BACK"][setMenu.sel]||"",W/2,184,1,INK3,"c");
@@ -3367,7 +3417,7 @@ function onKeyDown(e){
   if(mode==="end"){ if(titleT>0.8&&(e.code==="Enter"||e.code==="Space")) begin(); else if(titleT>0.8&&e.code==="Escape") toTitle(); return; }
   if(mode==="pause"&&settingsOpen){ if(e.code==="Escape") settingsOpen=false; else menuKey(setMenu,e.code); return; }
   if(mode==="pause"){ if(!pauseMenu.confirm&&(e.code==="Escape"||e.code==="KeyP")) togglePause(); else menuKey(pauseMenu,e.code); return; }
-  if(mode==="play"&&G.dlg&&G.introPanel!=null&&e.code==="Escape"){G.dlg=null;introDone();return;}
+  if(mode==="play"&&G.cut){ if(e.code==="Escape") endCut(); else if(e.code==="Space"&&!e.repeat) cutKey(); return; }
   if(mode==="play"&&G.ui){uiKey(e.code);return;}
   if(e.code==="Escape"||e.code==="KeyP"){togglePause();return;}
   if(G.struggle){ const d={KeyW:"up",KeyS:"down",KeyA:"left",KeyD:"right",ArrowUp:"up",ArrowDown:"down",ArrowLeft:"left",ArrowRight:"right"}[e.code]; if(d&&!e.repeat&&touchMode()) strugglePress(d); return; }
@@ -3392,6 +3442,7 @@ window.addEventListener("blur",()=>{keys.clear(); if(mode==="play") togglePause(
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&mode==="play") togglePause();});
 // a tap or click on the picture: menu rows, dialogue choices, or "next"
 function tapAt(x,y){
+  if(mode==="play"&&G&&G.cut){cutKey(); return;}
   if(mode==="play"&&G&&G.video&&!subMenu&&mode!=="pause"){videoKey(); return;}
   if(mode==="play"&&G&&G.struggle){const h=G.struggle.hits.find(h=>x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h); if(h) strugglePress(h.id); return;}
   if(mode==="play"&&G&&G.ui&&!subMenu){uiTap(x,y);return;}
