@@ -363,16 +363,24 @@ function paintRoom(r){
   if(r.scrawl){const w=textW(r.scrawl,1), x=Math.max(T+2,Math.min(W-T-2-w,T*2+Math.floor(rnd()*(W-T*4-w)))), y=r.kind==="lockers"?T*2+6:T+4+Math.floor(rnd()*4); text(g,r.scrawl,x,y,1,"#5a1a14");}
   if(r.hatch){
     const x=r.hatch.x, y=r.hatch.y, ty=r.exitT;
-    if(ty==="hatch"){
-      px(g,"#0a0806",x-9,y-9,18,18);px(g,"#3a2a1a",x-8,y-8,16,16);
-      for(let k=0;k<4;k++) px(g,"#2c1f13",x-8,y-6+k*4,16,1);
-      px(g,"#5a4f45",x-3,y-3,6,6); px(g,"#0a0806",x-1,y-1,2,2); // the socket a crank fits into
+    if(ty==="hatch"){ // a steel hatch in a concrete collar, hazard paint round it, the socket a crank fits into
+      px(g,"#2a2622",x-17,y-17,34,34); px(g,"#3a3530",x-16,y-16,32,32);
+      for(let k=0;k<8;k++){px(g,k%2?"#141210":"#8a7a2a",x-16+k*4,y-16,4,2); px(g,k%2?"#141210":"#8a7a2a",x-16+k*4,y+14,4,2);}
+      px(g,"#0a0806",x-12,y-12,24,24); px(g,"#4a4540",x-11,y-11,22,22); px(g,"#5a4f45",x-11,y-11,22,1); px(g,"#2e2a26",x-11,y+10,22,1);
+      for(let yy=0;yy<5;yy++) for(let xx=0;xx<5;xx++) px(g,"#5a5248",x-9+xx*4+(yy%2)*2,y-9+yy*4,1,1); // diamond plate
+      for(const [bx,by] of [[-10,-10],[9,-10],[-10,9],[9,9]]) px(g,"#6a6258",x+bx,y+by,1,1);
+      px(g,"#2e2a26",x-6,y-14,12,3); // the hinge
+      px(g,"#2a2622",x-4,y-4,8,8); px(g,"#6a6258",x-3,y-3,6,6); px(g,"#0a0806",x-1,y-1,2,2);
     }
-    if(ty==="lift"){
-      px(g,"#0a0908",x-16,y-30,32,34); px(g,"#141210",x-14,y-28,28,30);
-      for(let k=0;k<7;k++) px(g,"#3a3530",x-14+k*4+1,y-28,1,30);
-      px(g,"#3a3530",x-16,y-30,32,2); px(g,"#3a3530",x-16,y+2,32,2); px(g,"#2a2622",x-1,0,2,y-30);
-      px(g,"#2a2622",x+20,y-24,10,14); px(g,"#4a4540",x+20,y-24,10,1);
+    if(ty==="lift"){ // the shaft and its frame; the car, gate and panel are drawn live
+      px(g,"#050404",x-20,y-40,40,48); for(let k=0;k<6;k++) px(g,"#0e0c0b",x-20,y-36+k*8,40,1); // the shaft, going up into the dark
+      for(const sx of [x-24,x+20]){px(g,"#2e2a26",sx,y-44,4,54); px(g,"#4a4540",sx,y-44,1,54); px(g,"#1c1a17",sx+3,y-44,1,54); for(let k=0;k<6;k++) px(g,"#5a4f45",sx+1,y-40+k*9,2,1);} // I-beam posts
+      px(g,"#2e2a26",x-24,y-48,48,5); for(let k=0;k<12;k++) px(g,k%2?"#141210":"#8a7a2a",x-24+k*4,y-48,4,2); // header, hazard paint
+      px(g,"#2a2622",x-9,y-46,18,7); text(g,"LIFT",x,y-45,1,"#8a7a2a","c");
+      for(const cx of [x-5,x+4]) px(g,"#2a2622",cx,0,1,y-48); // the cables, up through the ceiling
+      g.fillStyle="#2e2a26"; g.beginPath(); g.arc(x,8,7,0,7); g.fill(); px(g,"#4a4540",x-1,7,2,2); // the pulley
+      px(g,"#2a2622",x-24,y+8,48,3); for(let k=0;k<12;k++) px(g,k%2?"#141210":"#6a5a1a",x-24+k*4,y+11,4,2); // threshold and floor paint
+      px(g,"#1c1a17",x+29,y-34,14,26); px(g,"#2e2a26",x+30,y-33,12,24); px(g,"#4a4540",x+30,y-33,12,1); px(g,"#2a2622",x+35,y-8,2,16); // the control box on its post
     }
     if(ty==="chimney"){
       g.fillStyle="#050505"; g.beginPath(); g.ellipse(x,16,18,8,0,0,7); g.fill();
@@ -380,11 +388,15 @@ function paintRoom(r){
       px(g,"#4a3f33",x-7,0,2,y+6); px(g,"#4a3f33",x+5,0,2,y+6);
       for(let k=4;k<y+6;k+=6) px(g,"#6b5a46",x-6,k,12,1);
     }
-    if(ty==="drain"){
-      px(g,"#070b0b",x-22,y-12,44,26); px(g,"#0c1414",x-20,y-10,40,22);
-      for(let k=0;k<6;k++) px(g,"#16262a",x-18+k*7,y-6+((k*5)%9),5,1);
-      px(g,"#3a3530",x-22,y-13,44,2); px(g,"#3a3530",x-22,y+13,18,2); px(g,"#3a3530",x+10,y+13,12,2); // a broken grate
-      for(let k=0;k<5;k++) px(g,"#2a2622",x-20+k*9,y-12,2,6);
+    if(ty==="drain"){ // the overflow drain: a sunken channel, its grate torn open, black water moving underneath
+      px(g,"#2a2622",x-28,y-16,56,34); px(g,"#1c1a17",x-27,y-15,54,32);
+      px(g,"#050808",x-24,y-12,48,26); px(g,"#0a1212",x-22,y-10,44,22);
+      for(let k=0;k<7;k++) px(g,"#16262a",x-20+k*6,y-6+((k*5)%9),4,1);
+      for(let k=0;k<9;k++){ if(k===4||k===5) continue; px(g,"#3a3530",x-23+k*5,y-12,2,26); px(g,"#4a4540",x-23+k*5,y-12,1,26);} // the grate bars
+      px(g,"#4a4540",x-1,y-14,2,6); px(g,"#4a4540",x+4,y-16,2,5); // two bars bent up and out
+      px(g,"#3a3530",x-24,y-13,48,2); px(g,"#3a3530",x-24,y+13,48,2);
+      for(let k=0;k<6;k++) px(g,"#1f2b1f",x-26+k*10,y+16,3,2); // slime on the lip
+      text(g,"OVERFLOW",x,y+20,1,"#4a4540","c");
     }
   }
   return c;
@@ -2455,6 +2467,7 @@ function staticLights(){
   for(const l of r.lamps) if(!l.dead){const fl=Math.sin(G.elapsed*7+l.ph)>0.93?0.4:1; out.push({x:l.x,y:l.y+4,r:34*fl});}
   if(r.kind==="boiler") out.push({x:2*T+32,y:2*T+16,r:44+Math.sin(G.elapsed*9)*3});
   if(r.exitT==="chimney") out.push({x:r.hatch.x,y:18,r:30});
+  if(r.exitT==="lift"&&G.liftReady) out.push({x:r.hatch.x,y:r.hatch.y-20,r:30}); // the car's bulb
   if(r.special==="shop") out.push({x:OBJ.x,y:OBJ.y-46,r:58});
   if(r.special==="office"&&G.officeLit) out.push({x:OBJ.x+8,y:OBJ.y-12,r:64});
   if(G.flare&&G.flare.room===r) out.push({x:G.flare.x,y:G.flare.y-3,r:48+Math.sin(G.elapsed*31)*4});
@@ -2683,7 +2696,7 @@ function renderGame(){
   if(G.flare&&G.flare.room===G.room) drawFlare(G.flare);
   if(rm.item&&FLOOR_ICONS.includes(rm.item.kind)) floorItem(ctx,rm.item);
   else if(rm.item){const it=rm.item; if(it.kind==="crank"){px(ctx,"#5a4f45",it.x-4,it.y-1,8,2); px(ctx,"#5a4f45",it.x+3,it.y-5,2,5); px(ctx,"#2a2622",it.x-5,it.y-2,2,4);} else {px(ctx,"#2a2622",it.x-2,it.y-4,4,7); px(ctx,"#c9a04a",it.x-2,it.y-4,4,1); px(ctx,"#c9a04a",it.x-2,it.y+2,4,1); px(ctx,"#e8e4dc",it.x-1,it.y-2,2,3);}}
-  if(rm.exitT==="lift"){const x=rm.hatch.x, y=rm.hatch.y; for(let k=0;k<3;k++) px(ctx,k<G.fuses?"#c9a04a":"#0a0908",x+22+k*3,y-20,2,6); if(G.liftReady){px(ctx,"#3a3530",x-14,y-28,28,2);} if(G.liftT>0) px(ctx,"#8a6a2a",x-1,0,2,y-30);}
+  if(rm.exitT==="lift") drawLift(rm.hatch.x,rm.hatch.y,t);
   if(rm.exitT==="drain"&&Math.sin(t*2)>0) px(ctx,"#22383c",rm.hatch.x-10+Math.floor((t*9)%20),rm.hatch.y-2,4,1);
   if(G.doorShut&&G.doorShut.room===rm){const d=G.doorShut.dir, D=DOOR[d], hor=d==="n"||d==="s"; for(let k=0;k<6;k++) hor?px(ctx,"#3a3530",D.x-16+k*6,d==="n"?0:H-T,3,T):px(ctx,"#3a3530",d==="w"?0:W-T,D.y-16+k*6,T,3);}
   for(const m of G.motes) px(ctx,"rgba(217,207,184,.22)",Math.round(m.x),Math.round(m.y));
@@ -2992,6 +3005,25 @@ function drawMenu(m,y0){
     menuRow("YES",W/2-28,y+26,m.confirm.sel===0,false,40); menuRow("NO",W/2+28,y+26,m.confirm.sel===1,false,40);
   }
 }
+// The lift, live: three fuse sockets and a lever on the box, the car when it is down, a scissor gate when it is not.
+function drawLift(x,y,t){
+  for(let k=0;k<3;k++){const fx=x+32+k*4; px(ctx,"#0a0908",fx,y-30,3,7); if(k<G.fuses){px(ctx,"#c9a04a",fx,y-30,3,7); px(ctx,"#f0d080",fx+1,y-29,1,2);}}
+  const pulled=G.liftT>0||G.liftReady; px(ctx,"#4a4540",x+34,y-21,4,2); px(ctx,"#8a8270",x+35,pulled?y-19:y-27,2,pulled?6:6); px(ctx,"#c4473a",x+34,pulled?y-14:y-29,4,2); // the lever
+  px(ctx,G.liftReady?"#6ad08a":G.fuses>=3?(Math.sin(t*6)>0?"#e8a94a":"#3a2a14"):"#5a1f17",x+39,y-31,2,2); // power light
+  const carY=G.liftReady?0:G.liftT>0?-Math.round(G.liftT/20*90):null; // the car: coming down, then here
+  if(carY!==null){const cy=y+6+carY;
+    ctx.save(); ctx.beginPath(); ctx.rect(x-20,y-40,40,48); ctx.clip();
+    px(ctx,"#1c1a17",x-19,cy-40,38,40); px(ctx,"#2e2a26",x-19,cy-42,38,3); px(ctx,"#3a3530",x-19,cy-1,38,3);
+    for(let k=0;k<6;k++) px(ctx,"#2a2622",x-17+k*7,cy-38,1,36);
+    px(ctx,G.liftReady?"#f2c35a":"#8a6a2a",x-2,cy-37,4,2); // its bulb
+    ctx.restore();
+    if(G.liftT>0&&Math.random()<0.4) px(ctx,"#f2c35a",x+(Math.random()<0.5?-20:19),y-40+Math.random()*48); // sparks off the rails
+  }
+  if(!G.liftReady){ // the scissor gate, pulled shut
+    for(let k=0;k<5;k++){const gx=x-18+k*8; for(let d=0;d<40;d++){px(ctx,"#4a4540",gx+Math.round(d/5),y-36+d); px(ctx,"#3a3530",gx+8-Math.round(d/5),y-36+d);}}
+    px(ctx,"#5a4f45",x-20,y-38,40,2); px(ctx,"#5a4f45",x-20,y+4,40,2);
+  } else { px(ctx,"#4a4540",x-20,y-38,4,44); for(let k=0;k<3;k++) px(ctx,"#3a3530",x-19+k,y-36,1,40); } // folded open to one side
+}
 function poly(pts,c){ctx.fillStyle=c; ctx.beginPath(); pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.fill();}
 function rustPlate(x,y,w,h){ // the menu sits on an old riveted plate
   px(ctx,"rgba(22,14,10,.92)",x,y,w,h); px(ctx,"#5a3a22",x,y,w,1); px(ctx,"#2a1a10",x,y+h-1,w,1); px(ctx,"#4a2e1a",x,y,1,h); px(ctx,"#2a1a10",x+w-1,y,1,h);
@@ -3008,7 +3040,11 @@ function renderTitle(){
   px(ctx,"#1a1412",6,30,26,162); for(let k=0;k<9;k++) px(ctx,"#241c18",6,40+k*18,26,1); px(ctx,"#2a201a",3,24,32,7); // the chimney
   if(Math.sin(t*3)>0.3) px(ctx,"#c4473a",18,20,2,2);
   for(let i=0;i<6;i++){const k=(t*0.18+i/6)%1; ctx.fillStyle="rgba(150,145,135,"+(0.28*(1-k)).toFixed(3)+")"; ctx.beginPath(); ctx.ellipse(19+k*40,20-k*30,4+k*12,3+k*6,0,0,7); ctx.fill();}
-  const ax=44, ay=191, lx=58, ly=176; // Ash at its foot, with his lantern
+  // the roof he is standing on: tar paper, a parapet, snow along the edge
+  px(ctx,"#141110",0,181,W,11); px(ctx,"#1e1a17",0,181,W,2); for(let x=0;x<W;x+=22) px(ctx,"#0b0908",x,183,1,9);
+  { const sr=mulberry(41); for(let x=0;x<W;){const w=4+Math.floor(sr()*9), h=1+Math.floor(sr()*3); px(ctx,"#8f8778",x,181-h,w,h); px(ctx,"#cfc6b0",x+1,181-h,Math.max(1,w-2),1); x+=w; } }
+  px(ctx,"#241c18",2,174,34,8); px(ctx,"#2a201a",2,174,34,1); // the chimney's footing
+  const ax=48, ay=181, lx=62, ly=173; // Ash at its foot, with his lantern
   const glow=ctx.createRadialGradient(lx,ly,0,lx,ly,46*lan.radius); glow.addColorStop(0,"rgba(232,169,74,.35)"); glow.addColorStop(1,"rgba(0,0,0,0)");
   ctx.globalCompositeOperation="lighter"; ctx.fillStyle=glow; ctx.fillRect(0,120,120,72); ctx.globalCompositeOperation="source-over";
   if(sprites.d) ctx.drawImage(sprites.d[0],ax-8,ay-25);
