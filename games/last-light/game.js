@@ -1022,6 +1022,7 @@ function startLoops(){
   A.loops={drone,wind:wg,flutter:fv,flutterPan:fp,srcs};
 }
 function stopLoops(){
+  humOff();
   if(!A.ctx||!A.loops.drone) return;
   const t=A.ctx.currentTime;
   A.loops.drone.gain.setTargetAtTime(0,t,0.3); A.loops.wind.gain.setTargetAtTime(0,t,0.3); A.loops.flutter.gain.setTargetAtTime(0,t,0.1);
@@ -1106,7 +1107,8 @@ function pasteCode(){
 }
 
 /* ================= game state ================= */
-let G=null, mode="title", last=performance.now();
+const NOINTRO=/^(localhost|127\.0\.0\.1)$/.test(location.hostname)&&new URLSearchParams(location.search).has("nointro");
+let G=null, mode=NOINTRO?"title":"tap", last=performance.now(); // "tap": a tap is needed before sound can play
 const keys=new Set();
 const fxRnd=mulberry(12345);
 
@@ -2100,6 +2102,7 @@ function update(dt){
   if(G&&G.toast&&!G.dlg){G.toast.t+=dt; if(G.toast.t>3.4) G.toast=null;} // a hint waits until the conversation ends
   if(notice) notice.t+=dt;
   titleT+=dt;
+  if(mode==="studio") updStudio(dt);
   if(mode!=="play") return;
   if(G.scare){G.scare.t+=dt; if(G.scare.t>0.75) G.scare=null;}
   G.shake=Math.max(0,G.shake-dt*14);
@@ -2449,7 +2452,8 @@ function updOther(dt){
 function render(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
-  if(mode==="title") renderTitle();
+  if(mode==="tap"||mode==="studio") renderStudio();
+  else if(mode==="title") renderTitle();
   else if(G){
     renderGame();
     ctx.setTransform(1,0,0,1,0,0);
@@ -2953,15 +2957,20 @@ function cycleInput(d){
   readSettings(); applyInput(); applyTouch(); keys.clear();
 }
 const openSettings=()=>{settingsOpen=true; setMenu.sel=0;};
-const titleMenu={sel:0,confirm:null,items:()=>[
-  ...(savedNight?[{label:"CONTINUE THE NIGHT",fn:continueNight}]:[]),
-  {label:savedNight?"NEW NIGHT":"LIGHT THE LANTERN",confirm:savedNight?"START OVER? THE SAVED NIGHT GOES.":undefined,fn:()=>{clearNight(); begin();}},
+let titlePage="main"; // or "extras"
+const titleMenu={sel:0,confirm:null,items:()=>titlePage==="extras"?[
   {label:"< "+curLantern().name+" >",fn:()=>cycleLantern(1),left:()=>cycleLantern(-1),right:()=>cycleLantern(1)},
-  {label:"SETTINGS",fn:openSettings},
   {label:"EXPORT SAVE",confirm:"SAVE A FILE TO THIS DEVICE?",fn:exportSave},
   {label:"IMPORT SAVE",fn:importSave},
   {label:"COPY SAVE CODE",fn:copyCode},
-  {label:"PASTE SAVE CODE",fn:pasteCode}
+  {label:"PASTE SAVE CODE",fn:pasteCode},
+  {label:"BACK",fn:()=>{titlePage="main"; titleMenu.sel=3;}}
+]:[
+  {label:"CONTINUE",fn:()=>{ if(savedNight) continueNight(); else notify("NO NIGHT SAVED YET. SAVE POINTS KEEP ONE."); }},
+  {label:"NEW GAME",confirm:savedNight?"START OVER? THE SAVED NIGHT GOES.":undefined,fn:()=>{clearNight(); begin();}},
+  {label:"SETTINGS",fn:openSettings},
+  {label:"EXTRAS",fn:()=>{titlePage="extras"; titleMenu.sel=0;}},
+  {label:"QUIT",fn:goHome}
 ]};
 const pauseMenu={sel:0,confirm:null,items:()=>[
   {label:"RESUME",fn:togglePause},
@@ -2970,7 +2979,7 @@ const pauseMenu={sel:0,confirm:null,items:()=>[
   {label:"RESTART RUN",confirm:"RESTART? THIS RUN WILL BE LOST.",fn:begin},
   {label:"EXPORT SAVE",confirm:"SAVE A FILE TO THIS DEVICE?",fn:exportSave},
   {label:"MAIN MENU",confirm:"QUIT TO THE MAIN MENU? THIS RUN WILL BE LOST.",fn:toTitle},
-  {label:"BACK TO SHANOWARE",confirm:"LEAVE FOR SHANOWARE? THIS RUN WILL BE LOST.",fn:()=>{location.href="../../index.html#last-light";}}
+  {label:"BACK TO SHANOWARE",confirm:"LEAVE FOR SHANOWARE? THIS RUN WILL BE LOST.",fn:goHome}
 ]};
 function menuKey(m,code){
   if(m.confirm){
@@ -3025,6 +3034,54 @@ function drawLift(x,y,t){
   } else { px(ctx,"#4a4540",x-20,y-38,4,44); for(let k=0;k<3;k++) px(ctx,"#3a3530",x-19+k,y-36,1,40); } // folded open to one side
 }
 function poly(pts,c){ctx.fillStyle=c; ctx.beginPath(); pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.fill();}
+/* ================= the studio intro: Shanoware Studios, then the title. It always plays in full. ================= */
+const STUDIO="SHANOWARE STUDIOS", logoImg=new Image(); let logoC=null;
+logoImg.onload=()=>{ // the icon has a dark square behind it; lift the logo off it so only the cartridge and flame show
+  const c=mk(logoImg.naturalWidth,logoImg.naturalHeight), g=c.getContext("2d"); g.drawImage(logoImg,0,0);
+  const d=g.getImageData(0,0,c.width,c.height), b=[d.data[0],d.data[1],d.data[2]];
+  for(let i=0;i<d.data.length;i+=4) if(Math.abs(d.data[i]-b[0])+Math.abs(d.data[i+1]-b[1])+Math.abs(d.data[i+2]-b[2])<24) d.data[i+3]=0;
+  g.putImageData(d,0,0); logoC=c;
+};
+logoImg.src="../../icons/icon-192.png";
+let studioT=0, typed=0;
+function startStudio(){ audioStart(); mode="studio"; studioT=0; typed=0; say("Shanoware Studios."); }
+function updStudio(dt){
+  const was=studioT; studioT+=dt;
+  const n=clamp(Math.floor((studioT-0.4)/0.085)+1,0,STUDIO.length); // a letter every 85 ms, with a click
+  if(n>typed){ typed=n; if(STUDIO[n-1]!==" ") tone({type:"square",f0:1800,dur:0.02,gain:0.03}); }
+  if(was<2.2&&studioT>=2.2) nz({dur:0.5,freq:3200,q:0.6,gain:0.18});            // static
+  if(was<2.7&&studioT>=2.7) tone({f0:120,f1:40,dur:1.1,gain:0.5,attack:0.005}); // the flash's boom
+  if(was<4.7&&studioT>=4.7){ titleT=0; humOn(); }                              // the title fades in
+  if(studioT>=5.7){ mode="title"; titleMenu.sel=savedNight?0:1; say("Last Light. Main menu."); }
+}
+function mixHex(a,b,k){ const c=[1,3,5].map(i=>Math.round(parseInt(a.substr(i,2),16)*(1-k)+parseInt(b.substr(i,2),16)*k)); return "rgb("+c.join(",")+")"; }
+function drawLogo(a){
+  ctx.globalAlpha=a;
+  if(logoC){ ctx.imageSmoothingEnabled=true; ctx.drawImage(logoC,128,30,64,64); ctx.imageSmoothingEnabled=false; }
+  else { px(ctx,"#3a3530",136,38,48,48); text(ctx,"S",160,52,3,"#b48ad0","c"); } // until the logo loads
+  ctx.globalAlpha=1;
+}
+function renderStudio(){
+  const t=studioT; ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
+  if(mode==="tap"){ text(ctx,"TAP TO START",W/2,H/2-3,1,INK3,"c"); return; }
+  if(t>=4.7){ renderTitle(); ctx.globalAlpha=clamp(1-(t-4.7),0,1); ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; return; }
+  if(t>=4.2) return; // a moment of black
+  const x0=Math.round(W/2-textW(STUDIO,2)/2), word=STUDIO.slice(0,typed);
+  if(t>=2.7){ // the flash, in lantern orange, going darker
+    ctx.fillStyle=mixHex("#e8a94a","#2a1a0c",clamp((t-2.7)/1.5,0,1)); ctx.fillRect(0,0,W,H);
+    drawLogo(1); text(ctx,STUDIO,x0,112,2,"#140c06"); return;
+  }
+  drawLogo(clamp(t/0.4,0,1));
+  text(ctx,word,x0,112,2,INK);
+  if(t<2.2&&Math.floor(t*4)%2===0) px(ctx,INK,x0+textW(word,2)+(word?2:0),112,8,14); // the cursor
+  if(t>=2.2){ for(let i=0;i<1400;i++){const g=Math.floor(Math.random()*200); px(ctx,"rgb("+g+","+g+","+g+")",Math.floor(Math.random()*W),Math.floor(Math.random()*H),2,1);} // static
+    for(let i=0;i<4;i++) px(ctx,"rgba(232,228,220,.35)",0,Math.floor(Math.random()*H),W,1); }
+}
+// a low hum behind the title menu
+function humOn(){ if(!A.ctx||A.hum) return; const o=A.ctx.createOscillator(), g=A.ctx.createGain(), t=A.ctx.currentTime; o.type="sine"; o.frequency.value=62;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.05,t+1); o.connect(g).connect(A.music); o.start(); A.hum={o,g}; }
+function humOff(){ const h=A.hum; if(!h) return; A.hum=null; const t=A.ctx.currentTime; h.g.gain.setTargetAtTime(0.0001,t,0.2); h.o.stop(t+1.2); }
+function goHome(){ location.href="../../index.html#last-light"; }
 function rustPlate(x,y,w,h){ // the menu sits on an old riveted plate
   px(ctx,"rgba(22,14,10,.92)",x,y,w,h); px(ctx,"#5a3a22",x,y,w,1); px(ctx,"#2a1a10",x,y+h-1,w,1); px(ctx,"#4a2e1a",x,y,1,h); px(ctx,"#2a1a10",x+w-1,y,1,h);
   for(const [rx,ry] of [[x+3,y+3],[x+w-5,y+3],[x+3,y+h-5],[x+w-5,y+h-5]]){px(ctx,"#7a5233",rx,ry,2,2); px(ctx,"#3e1410",rx+1,ry+2,1,3);}
@@ -3062,7 +3119,8 @@ function renderTitle(){
   drawMenu(tm,mny);
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,184,1,FLAME,"c","#000");
   else if(settingsOpen) text(ctx,["TIPS LIKE: THE LANTERN IS RUNNING LOW.","AUTO PICKS KEYBOARD OR TOUCH FOR THIS DEVICE.","CHANGE WHICH KEY DOES WHAT.","ESC: BACK"][setMenu.sel]||"",W/2,184,1,INK3,"c");
-  else if(titleMenu.sel===1) text(ctx,lan.perk,W/2,184,1,INK3,"c");
+  else if(titlePage==="extras"&&titleMenu.sel===0) text(ctx,lan.perk,W/2,184,1,INK3,"c");
+  else if(titlePage==="main"&&titleMenu.sel===0&&!savedNight) text(ctx,"NO NIGHT SAVED YET",W/2,184,1,INK3,"c");
   else{const nxt=LANTERNS.find(l=>!owned().includes(l)); if(nxt&&sv.runs) text(ctx,"NEXT LANTERN: "+nxt.how,W/2,184,1,INK3,"c");}
 }
 function renderPause(){
@@ -3442,14 +3500,16 @@ function togglePause(){
 function toTitle(){
   settingsOpen=false;
   stopLoops(); if(A.ctx&&A.ctx.state==="suspended") A.ctx.resume();
-  G=null; mode="title"; titleT=0; titleMenu.sel=0; titleMenu.confirm=null; say("Main menu.");
+  G=null; mode="title"; titleT=0; titlePage="main"; titleMenu.sel=savedNight?0:1; titleMenu.confirm=null; humOn(); say("Main menu.");
 }
 function onKeyDown(e){
   if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
   if(e.repeat){keys.add(e.code);return;}
   keys.add(e.code);
   if(subMenu){ if(e.code==="Escape"&&!subMenu.confirm){ subMenu=null; keysNotice=""; } else menuKey(subMenu,e.code); return; }
-  if(mode==="title"){audioStart(); if(settingsOpen&&e.code==="Escape") settingsOpen=false; else menuKey(settingsOpen?setMenu:titleMenu,e.code); return;}
+  if(mode==="tap"){startStudio(); return;}
+  if(mode==="studio") return; // the intro always plays in full
+  if(mode==="title"){audioStart(); humOn(); if(settingsOpen&&e.code==="Escape") settingsOpen=false; else if(titlePage==="extras"&&e.code==="Escape"&&!titleMenu.confirm){titlePage="main"; titleMenu.sel=3;} else menuKey(settingsOpen?setMenu:titleMenu,e.code); return;}
   if(mode==="end"){ if(titleT>0.8&&(e.code==="Enter"||e.code==="Space")) begin(); else if(titleT>0.8&&e.code==="Escape") toTitle(); return; }
   if(mode==="pause"&&settingsOpen){ if(e.code==="Escape") settingsOpen=false; else menuKey(setMenu,e.code); return; }
   if(mode==="pause"){ if(!pauseMenu.confirm&&(e.code==="Escape"||e.code==="KeyP")) togglePause(); else menuKey(pauseMenu,e.code); return; }
@@ -3478,6 +3538,8 @@ window.addEventListener("blur",()=>{keys.clear(); if(mode==="play") togglePause(
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&mode==="play") togglePause();});
 // a tap or click on the picture: menu rows, dialogue choices, or "next"
 function tapAt(x,y){
+  if(mode==="tap"){startStudio(); return;}
+  if(mode==="studio") return;
   if(mode==="play"&&G&&G.cut){cutKey(); return;}
   if(mode==="play"&&G&&G.video&&!subMenu&&mode!=="pause"){videoKey(); return;}
   if(mode==="play"&&G&&G.struggle){const h=G.struggle.hits.find(h=>x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h); if(h) strugglePress(h.id); return;}
@@ -3585,7 +3647,7 @@ function loop(now){
   const camUp=G&&G.cam?"1":""; if(document.body.dataset.cam!==camUp) document.body.dataset.cam=camUp;
   requestAnimationFrame(loop);
 }
-readNight();
+readNight(); titleMenu.sel=savedNight?0:1; // the menu starts on Continue only when there is a night to continue
 requestAnimationFrame(loop);
 
 /* ================= self-check (run LastLight.selfTest() in the console) ================= */
