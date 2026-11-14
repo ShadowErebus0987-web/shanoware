@@ -2102,7 +2102,6 @@ function update(dt){
   if(G&&G.toast&&!G.dlg){G.toast.t+=dt; if(G.toast.t>3.4) G.toast=null;} // a hint waits until the conversation ends
   if(notice) notice.t+=dt;
   titleT+=dt;
-  if(mode==="studio") updStudio(dt);
   if(mode!=="play") return;
   if(G.scare){G.scare.t+=dt; if(G.scare.t>0.75) G.scare=null;}
   G.shake=Math.max(0,G.shake-dt*14);
@@ -3003,10 +3002,11 @@ function menuRow(label,cx,yy,on,pressed,minW){
     px(ctx,pressed?FLAME:"#2a1d0e",rx,yy-2,rw,11); px(ctx,FLAME,rx,yy-2,1,11); px(ctx,FLAME,rx+rw-1,yy-2,1,11); }
   text(ctx,label,cx,yy,1,on?(pressed?"#140c04":FLAME):INK2,"c",on?null:"#000");
 }
-function drawMenu(m,y0){
+function drawMenu(m,y0,slide){ // slide(i): 0..1, how far row i has come in
   const pressed=performance.now()-(m.pressT||0)<130;
   m.hits=m.items().map((it,i)=>({i,y0:y0+i*10-2,y1:y0+i*10+8}));
-  m.items().forEach((it,i)=>menuRow(it.label,W/2,y0+i*10,i===m.sel,pressed&&i===m.sel));
+  m.items().forEach((it,i)=>{ const k=slide?slide(i):1; if(k<=0) return; ctx.globalAlpha=k;
+    menuRow(it.label,W/2,y0+i*10+Math.round((1-k)*4),i===m.sel,pressed&&i===m.sel); ctx.globalAlpha=1; });
   if(m.confirm){
     const w=Math.max(textW(m.confirm.msg,1)+24,140), x=Math.round(W/2-w/2), y=72;
     uiFrame(ctx,x,y,w,42,FLAME,"rgba(5,5,5,.97)","#2a1d0e");
@@ -3034,49 +3034,9 @@ function drawLift(x,y,t){
   } else { px(ctx,"#4a4540",x-20,y-38,4,44); for(let k=0;k<3;k++) px(ctx,"#3a3530",x-19+k,y-36,1,40); } // folded open to one side
 }
 function poly(pts,c){ctx.fillStyle=c; ctx.beginPath(); pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.fill();}
-/* ================= the studio intro: Shanoware Studios, then the title. It always plays in full. ================= */
-const STUDIO="SHANOWARE STUDIOS", logoImg=new Image(); let logoC=null;
-logoImg.onload=()=>{ // the icon has a dark square behind it; lift the logo off it so only the cartridge and flame show
-  const c=mk(logoImg.naturalWidth,logoImg.naturalHeight), g=c.getContext("2d"); g.drawImage(logoImg,0,0);
-  const d=g.getImageData(0,0,c.width,c.height), b=[d.data[0],d.data[1],d.data[2]];
-  for(let i=0;i<d.data.length;i+=4) if(Math.abs(d.data[i]-b[0])+Math.abs(d.data[i+1]-b[1])+Math.abs(d.data[i+2]-b[2])<24) d.data[i+3]=0;
-  g.putImageData(d,0,0); logoC=c;
-};
-logoImg.src="../../icons/icon-192.png";
-let studioT=0, typed=0;
-function startStudio(){ audioStart(); mode="studio"; studioT=0; typed=0; say("Shanoware Studios."); }
-function updStudio(dt){
-  const was=studioT; studioT+=dt;
-  const n=clamp(Math.floor((studioT-0.4)/0.085)+1,0,STUDIO.length); // a letter every 85 ms, with a click
-  if(n>typed){ typed=n; if(STUDIO[n-1]!==" ") tone({type:"square",f0:1800,dur:0.02,gain:0.03}); }
-  if(was<2.2&&studioT>=2.2) nz({dur:0.5,freq:3200,q:0.6,gain:0.18});            // static
-  if(was<2.7&&studioT>=2.7) tone({f0:120,f1:40,dur:1.1,gain:0.5,attack:0.005}); // the flash's boom
-  if(was<4.7&&studioT>=4.7){ titleT=0; humOn(); }                              // the title fades in
-  if(studioT>=5.7){ mode="title"; titleMenu.sel=savedNight?0:1; say("Last Light. Main menu."); }
-}
-function mixHex(a,b,k){ const c=[1,3,5].map(i=>Math.round(parseInt(a.substr(i,2),16)*(1-k)+parseInt(b.substr(i,2),16)*k)); return "rgb("+c.join(",")+")"; }
-function drawLogo(a){
-  ctx.globalAlpha=a;
-  if(logoC){ ctx.imageSmoothingEnabled=true; ctx.drawImage(logoC,128,30,64,64); ctx.imageSmoothingEnabled=false; }
-  else { px(ctx,"#3a3530",136,38,48,48); text(ctx,"S",160,52,3,"#b48ad0","c"); } // until the logo loads
-  ctx.globalAlpha=1;
-}
-function renderStudio(){
-  const t=studioT; ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
-  if(mode==="tap"){ text(ctx,"TAP TO START",W/2,H/2-3,1,INK3,"c"); return; }
-  if(t>=4.7){ renderTitle(); ctx.globalAlpha=clamp(1-(t-4.7),0,1); ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; return; }
-  if(t>=4.2) return; // a moment of black
-  const x0=Math.round(W/2-textW(STUDIO,2)/2), word=STUDIO.slice(0,typed);
-  if(t>=2.7){ // the flash, in lantern orange, going darker
-    ctx.fillStyle=mixHex("#e8a94a","#2a1a0c",clamp((t-2.7)/1.5,0,1)); ctx.fillRect(0,0,W,H);
-    drawLogo(1); text(ctx,STUDIO,x0,112,2,"#140c06"); return;
-  }
-  drawLogo(clamp(t/0.4,0,1));
-  text(ctx,word,x0,112,2,INK);
-  if(t<2.2&&Math.floor(t*4)%2===0) px(ctx,INK,x0+textW(word,2)+(word?2:0),112,8,14); // the cursor
-  if(t>=2.2){ for(let i=0;i<1400;i++){const g=Math.floor(Math.random()*200); px(ctx,"rgb("+g+","+g+","+g+")",Math.floor(Math.random()*W),Math.floor(Math.random()*H),2,1);} // static
-    for(let i=0;i<4;i++) px(ctx,"rgba(232,228,220,.35)",0,Math.floor(Math.random()*H),W,1); }
-}
+/* ================= the studio intro: Shanoware Studios (intro.js), then the title. It always plays in full. ================= */
+let introTitle=false; // the intro's last fade shows the title through it
+function renderStudio(){ if(introTitle) renderTitle(); else { ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H); } }
 // a low hum behind the title menu
 function humOn(){ if(!A.ctx||A.hum) return; const o=A.ctx.createOscillator(), g=A.ctx.createGain(), t=A.ctx.currentTime; o.type="sine"; o.frequency.value=62;
   g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.05,t+1); o.connect(g).connect(A.music); o.start(); A.hum={o,g}; }
@@ -3108,15 +3068,16 @@ function renderTitle(){
   ctx.drawImage(lanternIcon(2,100,t),lx-5,ly-8,10,16);
   if(t%14>9){const a=t*2.2; drawMoth(ctx,lx+Math.cos(a)*16,ly-10+Math.sin(a*1.3)*8,t);} // now and then, the Moth comes to the light
   { const s0=mulberry(9); for(let i=0;i<70;i++){const k=0.6+s0()*0.8, x=((s0()*340+t*5*k+Math.sin(t*0.8+i)*6)%340+340)%340-10, y=(s0()*200+t*12*k)%200-6; px(ctx,k>1.1?"#e8e4dc":"#8f8778",Math.round(x),Math.round(y),k>1.25?2:1,1);} } // snow
-  text(ctx,"LAST LIGHT",W/2,12,4,FLAME,"c",EMBER);
+  const come=i=>{const k=clamp((t-0.2-i*0.09)/0.6,0,1); return 1-(1-k)**3;}; // the words arrive one after another
+  ctx.globalAlpha=come(0); text(ctx,"LAST LIGHT",W/2,12+Math.round((1-come(0))*4),4,FLAME,"c",EMBER); ctx.globalAlpha=come(1);
   { const i=Math.floor(t*0.7)%10, on=Math.sin(t*23)>0.2||Math.floor(t*0.7*7)%5; if(!on&&i!==4) px(ctx,"rgba(5,6,11,.75)",W/2-118+i*24,12,20,28); } // a letter flickers, like an old sign
   text(ctx,"FIND A WAY OUT BEFORE THE LIGHT RUNS OUT.",W/2,47,1,INK2,"c");
   const sv=loadSave();
   const found=Object.keys(sv.endings||{}).filter(k=>ENDING_IDS.includes(k)).length, notes=(sv.notes||[]).length;
   if(sv.runs) text(ctx,"ENDINGS "+found+"/"+ENDING_IDS.length+"   NOTES "+notes+"/"+NOTES.length+"   LANTERNS "+owned().length+"/"+LANTERNS.length,W/2,57,1,INK3,"c");
   const tm=settingsOpen?setMenu:titleMenu, nI=tm.items().length, mny=settingsOpen?120:106;
-  rustPlate(W/2-86,mny-7,172,nI*10+9);
-  drawMenu(tm,mny);
+  ctx.globalAlpha=come(2); rustPlate(W/2-86,mny-7,172,nI*10+9); ctx.globalAlpha=1;
+  drawMenu(tm,mny,i=>come(2+i));
   if(notice&&notice.t<4) text(ctx,notice.msg,W/2,184,1,FLAME,"c","#000");
   else if(settingsOpen) text(ctx,["TIPS LIKE: THE LANTERN IS RUNNING LOW.","AUTO PICKS KEYBOARD OR TOUCH FOR THIS DEVICE.","CHANGE WHICH KEY DOES WHAT.","ESC: BACK"][setMenu.sel]||"",W/2,184,1,INK3,"c");
   else if(titlePage==="extras"&&titleMenu.sel===0) text(ctx,lan.perk,W/2,184,1,INK3,"c");
@@ -3507,8 +3468,7 @@ function onKeyDown(e){
   if(e.repeat){keys.add(e.code);return;}
   keys.add(e.code);
   if(subMenu){ if(e.code==="Escape"&&!subMenu.confirm){ subMenu=null; keysNotice=""; } else menuKey(subMenu,e.code); return; }
-  if(mode==="tap"){startStudio(); return;}
-  if(mode==="studio") return; // the intro always plays in full
+  if(mode==="tap"||mode==="studio") return; // intro.js takes the first key, and the intro always plays in full
   if(mode==="title"){audioStart(); humOn(); if(settingsOpen&&e.code==="Escape") settingsOpen=false; else if(titlePage==="extras"&&e.code==="Escape"&&!titleMenu.confirm){titlePage="main"; titleMenu.sel=3;} else menuKey(settingsOpen?setMenu:titleMenu,e.code); return;}
   if(mode==="end"){ if(titleT>0.8&&(e.code==="Enter"||e.code==="Space")) begin(); else if(titleT>0.8&&e.code==="Escape") toTitle(); return; }
   if(mode==="pause"&&settingsOpen){ if(e.code==="Escape") settingsOpen=false; else menuKey(setMenu,e.code); return; }
@@ -3538,8 +3498,7 @@ window.addEventListener("blur",()=>{keys.clear(); if(mode==="play") togglePause(
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&mode==="play") togglePause();});
 // a tap or click on the picture: menu rows, dialogue choices, or "next"
 function tapAt(x,y){
-  if(mode==="tap"){startStudio(); return;}
-  if(mode==="studio") return;
+  if(mode==="tap"||mode==="studio") return; // the intro covers the picture and takes the tap
   if(mode==="play"&&G&&G.cut){cutKey(); return;}
   if(mode==="play"&&G&&G.video&&!subMenu&&mode!=="pause"){videoKey(); return;}
   if(mode==="play"&&G&&G.struggle){const h=G.struggle.hits.find(h=>x>=h.x&&x<h.x+h.w&&y>=h.y&&y<h.y+h.h); if(h) strugglePress(h.id); return;}
@@ -3648,6 +3607,12 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 readNight(); titleMenu.sel=savedNight?0:1; // the menu starts on Continue only when there is a night to continue
+if(NOINTRO||!window.StudioIntro){ const el=document.getElementById("intro"); if(el) el.remove(); mode="title"; }
+else StudioIntro({ name:"SHANOWARE STUDIOS", color:"#cc00d6",
+  audio(){ audioStart(); mode="studio"; say("Shanoware Studios."); return A.ctx; }, // inside the tap, so phones allow sound
+  muted:()=>!SW.sound,
+  onTitle(){ introTitle=true; titleT=0; humOn(); },
+  onReady(){ introTitle=false; mode="title"; titleMenu.sel=savedNight?0:1; say("Last Light. Main menu."); } });
 requestAnimationFrame(loop);
 
 /* ================= self-check (run LastLight.selfTest() in the console) ================= */

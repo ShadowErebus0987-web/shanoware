@@ -17,7 +17,8 @@
     "slots": 3,
     "files": [
       "games/last-light/game.js",
-      "games/last-light/enemies.js"
+      "games/last-light/enemies.js",
+      "games/last-light/intro.js"
     ],
     "avatars": [
       {

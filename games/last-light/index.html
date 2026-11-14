@@ -58,13 +58,52 @@
   body:not([data-mode="play"]):not([data-mode="pause"]) #b-pause{display:none}
 
   /* ---- held upright on a touch screen: ask to turn the phone ---- */
-  #turn{display:none;position:fixed;inset:0;z-index:3;background:#050505;color:#f3e6cf;
+  #turn{display:none;position:fixed;inset:0;z-index:4;background:#050505;color:#f3e6cf;
     place-content:center;justify-items:center;gap:18px;text-align:center;font:16px/1.4 "Pixelify Sans",system-ui,sans-serif;padding:24px}
   #turn b{font:700 18px/1 "Silkscreen",ui-monospace,monospace;letter-spacing:.06em;color:#e8a94a}
   #turn i{width:44px;height:72px;border:3px solid #f3e6cf;border-radius:6px;animation:tilt 1.6s ease-in-out infinite}
   @keyframes tilt{0%,30%{transform:none}60%,100%{transform:rotate(-90deg)}}
   @media (prefers-reduced-motion:reduce){#turn i{animation:none;transform:rotate(-90deg)}}
   @media (orientation:portrait){body[data-input="touch"] #turn{display:grid}}
+
+  /* ---- the Shanoware Studios intro (intro.js): the studio's template, kept as it is ---- */
+  #intro{--brand:#cc00d6;--flash:#cc00d6;position:fixed;inset:0;z-index:3;background:#000;overflow:hidden;
+    font-family:"Silkscreen","Courier New",monospace;color:var(--brand);user-select:none;-webkit-user-select:none}
+  #intro .layer{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  #start{color:#888;font-size:clamp(14px,3.5vmin,22px);letter-spacing:.2em;cursor:pointer;z-index:50;background:#000}
+  #start span{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  #stage{position:fixed;inset:0;z-index:1}
+  #flash{background:var(--flash);opacity:0;z-index:1}
+  #studio{z-index:2;opacity:0;gap:3vmin}
+  #emblem{width:min(38vmin,260px);image-rendering:pixelated;transform-origin:50% 50%}
+  #name{font-weight:700;font-size:clamp(14px,min(6.2vmin,5.2vw),48px);letter-spacing:.12em;
+    white-space:pre;min-height:1.3em;text-align:center;text-shadow:0 0 10px color-mix(in srgb,var(--brand) 45%,transparent)}
+  #cursor{opacity:0}
+  #cursor.on{opacity:1;animation:blink .55s steps(1) infinite}
+  #cursor.solid{animation:none;opacity:1}
+  @keyframes blink{50%{opacity:0}}
+  /* during the flash the logo and name turn white so they never vanish into the flash colour */
+  .white #emblem{filter:grayscale(1) brightness(4) drop-shadow(0 0 14px rgba(255,255,255,.6))}
+  .white #name{color:#fff;text-shadow:0 0 14px rgba(255,255,255,.6)}
+  /* old-TV power-on: the logo opens from a thin bright line */
+  .crt-on #emblem{animation:crtOpen .55s cubic-bezier(.2,.9,.3,1) both}
+  @keyframes crtOpen{0%{transform:scale(1.4,.004);filter:brightness(6)}45%{transform:scale(1.02,.06);filter:brightness(4)}100%{transform:scale(1,1);filter:brightness(1)}}
+  /* quick colour-split glitch before the static */
+  .glitch #emblem{animation:glitch .22s steps(2) 1}
+  @keyframes glitch{0%{transform:translateX(0);filter:drop-shadow(3px 0 0 #0ff) drop-shadow(-3px 0 0 #f0f)}
+    33%{transform:translateX(-4px);filter:drop-shadow(-4px 0 0 #0ff) drop-shadow(4px 0 0 #f00)}
+    66%{transform:translateX(3px) skewX(-6deg);filter:drop-shadow(2px 0 0 #0ff) drop-shadow(-2px 0 0 #f0f)}
+    100%{transform:translateX(0)}}
+  /* impact on the boom */
+  .punch #emblem,.punch #name{animation:punch .45s cubic-bezier(.2,1.6,.4,1) both}
+  @keyframes punch{0%{transform:scale(1.1)}100%{transform:scale(1)}}
+  .shake{animation:shake .35s linear 1}
+  @keyframes shake{0%{transform:translate(6px,-4px)}20%{transform:translate(-5px,3px)}40%{transform:translate(4px,2px)}
+    60%{transform:translate(-2px,-2px)}80%{transform:translate(1px,1px)}100%{transform:translate(0,0)}}
+  #static{z-index:3;width:100%;height:100%;opacity:0;image-rendering:pixelated;background:none}
+  #scan{z-index:9;pointer-events:none;opacity:0;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.28) 2px 3px)}
+  @media (prefers-reduced-motion:reduce){.shake,.glitch #emblem,.punch #emblem,.punch #name{animation:none}}
 
   @font-face{font-family:"Silkscreen";src:url(../../fonts/silkscreen-400.woff2) format("woff2");font-display:swap}
   @font-face{font-family:"Silkscreen";src:url(../../fonts/silkscreen-700.woff2) format("woff2");font-weight:700;font-display:swap}
@@ -90,9 +129,22 @@
   <button type="button" class="top" id="b-inv" data-key="Tab">BAG</button>
   <button type="button" class="top" id="b-book" data-key="KeyB">BOOK</button>
 </div>
+<div id="intro">
+  <div id="stage">
+    <div id="flash" class="layer"></div>
+    <div id="studio" class="layer">
+      <img id="emblem" alt="Shanoware Studios logo">
+      <div id="name"><span id="typed"></span><span id="cursor">_</span></div>
+    </div>
+    <canvas id="static" class="layer" width="160" height="90"></canvas>
+  </div>
+  <div id="scan" class="layer"></div>
+  <div id="start" class="layer"><span>TAP TO START</span></div>
+</div>
 <div id="turn" role="alert"><i></i><b>TURN YOUR PHONE</b><span>Last Light plays sideways.</span></div>
 
 <script src="../../errlog.js"></script>
+<script src="intro.js"></script>
 <script src="enemies.js"></script>
 <script src="game.js"></script>
 </body>
